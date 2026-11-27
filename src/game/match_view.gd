@@ -26,6 +26,7 @@ var replay_pending := false
 var replay_cam_saved := 0
 var done := false
 
+var kits: Array = []          # per team [shirt, shorts, keeper shirt]
 var prev_ball := Vector3.ZERO
 var prev_pos: Array = []
 
@@ -59,11 +60,13 @@ func _ready() -> void:
 	ball_view = BallView.new()
 	add_child(ball_view)
 	ball_view.build()
+	_pick_kits()
 	for sp in sim.players:
 		var p := sp as SimPlayer
 		var v := PlayerView.new()
 		add_child(v)
-		v.build(sim.teams[p.team], p.data, p.is_gk())
+		var k: Array = kits[p.team]
+		v.build(k[0], k[1], p.data, k[2] if p.is_gk() else Color(0, 0, 0, 0))
 		v.visible = p.active
 		views.append(v)
 		prev_pos.append(p.pos)
@@ -75,7 +78,7 @@ func _ready() -> void:
 	cam.snap_to(sim.ball.pos)
 	hud = MatchHud.new()
 	add_child(hud)
-	hud.build(sim, cfg.get("title", "Exhibition"))
+	hud.build(sim, cfg.get("title", "Exhibition"), [kits[0][0], kits[1][0]])
 	if cfg.has("quit_text"):
 		hud.set_quit_text(cfg["quit_text"])
 	hud.resume_requested.connect(_toggle_pause)
@@ -90,6 +93,38 @@ func _ready() -> void:
 	hud.flash("KICK-OFF", "%s  vs  %s" % [sim.teams[0].name, sim.teams[1].name], 1.6)
 	if humans.size() > 0:
 		hud.hint.text = _hint_text(human_device[humans[0]["id"]])
+
+
+static func color_dist(a: Color, b: Color) -> float:
+	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b)
+
+
+func _pick_kits() -> void:
+	## Away team switches to its second kit (or white/black) when shirts clash.
+	var t0: TeamData = sim.teams[0]
+	var t1: TeamData = sim.teams[1]
+	var a1 := t1.color1
+	var a2 := t1.color2
+	if color_dist(t0.color1, a1) < 0.6:
+		a1 = t1.color2
+		a2 = t1.color1
+		if color_dist(t0.color1, a1) < 0.6:
+			a1 = Color("f8fafc") if t0.color1.get_luminance() < 0.6 else Color("111827")
+	kits = [[t0.color1, t0.color2], [a1, a2]]
+	var gk_options := [Color("22c55e"), Color("a855f7"), Color("f97316"), Color("0ea5e9"), Color("111827"), Color("fde047")]
+	var used: Array = [t0.color1, a1]
+	for t in 2:
+		var best: Color = gk_options[0]
+		var bd := -1.0
+		for c in gk_options:
+			var d := 99.0
+			for u in used:
+				d = minf(d, color_dist(c, u))
+			if d > bd:
+				bd = d
+				best = c
+		used.append(best)
+		kits[t].append(best)
 
 
 func _hint_text(dev: String) -> String:
@@ -182,7 +217,12 @@ func _handle_events() -> void:
 
 func _show_fulltime() -> void:
 	done = true
+	await get_tree().create_timer(1.6).timeout
+	hud.banner.text = ""
+	hud.sub_banner.text = ""
 	hud.show_fulltime(sim, cfg.get("fulltime_note", ""))
+	if OS.get_environment("OP_SHOT_ON") == "fulltime":
+		Game.capture_in(60)
 
 
 func _process(dt: float) -> void:
@@ -289,6 +329,8 @@ func _start_replay(frames: Array) -> void:
 	cam.mode = CameraRig.CAM_LOW if cam.mode != CameraRig.CAM_LOW else CameraRig.CAM_BROADCAST
 	var s: PackedFloat32Array = frames[0]
 	cam.snap_to(Vector3(s[0], 0, s[2]))
+	if OS.get_environment("OP_SHOT_ON") == "replay":
+		Game.capture_in(90)
 
 
 func _end_replay() -> void:

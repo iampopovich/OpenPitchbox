@@ -24,7 +24,8 @@ func _ready() -> void:
 	if ResourceLoader.exists("res://assets/sfx/crowd_loop.wav"):
 		var s: AudioStreamWAV = load("res://assets/sfx/crowd_loop.wav")
 		s.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		s.loop_end = s.data.size() / 2
+		s.loop_begin = 0
+		s.loop_end = int(s.get_length() * s.mix_rate)
 		crowd.stream = s
 		crowd.volume_db = -12.0
 		crowd.play()

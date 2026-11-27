@@ -25,7 +25,7 @@ var ft_panel: PanelContainer
 var quit_text := "Quit match"
 
 
-func build(sim: MatchSim, title: String) -> void:
+func build(sim: MatchSim, title: String, shirt: Array) -> void:
 	layer = 5
 	root = Control.new()
 	root.theme = UiTheme.get_theme()
@@ -44,14 +44,14 @@ func build(sim: MatchSim, title: String) -> void:
 	board.add_child(hb)
 	var t0: TeamData = sim.teams[0]
 	var t1: TeamData = sim.teams[1]
-	hb.add_child(UiTheme.chip(t0.color1, Vector2(14, 30)))
+	hb.add_child(UiTheme.chip(shirt[0], Vector2(14, 30)))
 	name0 = UiTheme.label(t0.short, 26)
 	hb.add_child(name0)
 	score_lbl = UiTheme.label("0 - 0", 34, Color.WHITE)
 	hb.add_child(score_lbl)
 	name1 = UiTheme.label(t1.short, 26)
 	hb.add_child(name1)
-	hb.add_child(UiTheme.chip(t1.color1, Vector2(14, 30)))
+	hb.add_child(UiTheme.chip(shirt[1], Vector2(14, 30)))
 	clock_lbl = UiTheme.label("3:00", 26, UiTheme.ACCENT2)
 	clock_lbl.custom_minimum_size = Vector2(110, 0)
 	clock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -164,7 +164,7 @@ func show_power(screen_pos: Vector2, v: float) -> void:
 func show_fulltime(sim: MatchSim, extra: String = "") -> void:
 	ft_panel = PanelContainer.new()
 	ft_panel.set_anchors_preset(Control.PRESET_CENTER)
-	ft_panel.position = Vector2(-330, -280)
+	ft_panel.position = Vector2(-330, -250)
 	ft_panel.custom_minimum_size = Vector2(660, 0)
 	root.add_child(ft_panel)
 	var vb := VBoxContainer.new()
