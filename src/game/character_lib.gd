@@ -11,9 +11,9 @@ const CMU_PATH := "res://assets/third_party/cmu/cmu_football.glb"
 # (the actor's facing at the reference time becomes +Z; default = start)
 # (source times were measured with tools/blender/analyze_cmu.py; "contact" notes the ball strike)
 const CMU_CLIPS := {
-	"Kick_Shot": ["10_03", 0.92, 1.75, false],        # contact 1.17
-	"Kick_Shot2": ["11_01", 3.17, 3.95, false],       # contact 3.42
-	"Kick_Pass": ["10_02", 2.70, 3.40, false],        # contact 2.92
+	"Kick_Shot": ["10_03", 1.045, 1.75, false],       # contact 1.17 = KICK_WINDUP after start at speed 1.25
+	"Kick_Shot2": ["11_01", 3.295, 3.95, false],      # contact 3.42
+	"Kick_Pass": ["10_02", 2.795, 3.40, false],       # contact 2.92
 	"Kick_Volley": ["10_06", 3.20, 3.95, false],      # contact 3.42
 	"Header_Jump": ["105_43", 0.62, 1.55, false],     # peak 1.0
 	"Header_RunJump": ["127_21", 0.35, 1.30, false],  # peak 0.75

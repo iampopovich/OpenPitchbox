@@ -52,8 +52,15 @@ static func make_player(rng: RandomNumberGenerator, role: String, mean: float, n
 	var p := PlayerData.new()
 	p.name = "%s %s" % [FIRST[rng.randi() % FIRST.size()], LAST[rng.randi() % LAST.size()]]
 	p.number = number
+	# every player has a profile: one clear strength and one weakness around the team level
+	var strong: String = C.STAT_KEYS[rng.randi() % 4]
+	var weak: String = C.STAT_KEYS[rng.randi() % 4]
 	for k in C.STAT_KEYS:
-		var v := mean + rng.randfn(0.0, 1.4)
+		var v := mean + rng.randfn(0.0, 2.2)
+		if k == strong:
+			v += 3.0
+		elif k == weak:
+			v -= 2.5
 		if k == "kep" and role != "GK":
 			v = mean * 0.45 + rng.randfn(0.0, 1.0)
 		elif role == "GK" and k != "kep" and k != "pas":

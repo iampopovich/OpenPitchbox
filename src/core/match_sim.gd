@@ -373,6 +373,10 @@ func _play_tick(dt: float) -> void:
 	_auto_switch()
 
 
+var presser := [-1, -1]          # per team: the one player who goes for the ball
+var cover := [-1, -1]            # per team: the one player who covers behind the presser
+
+
 func _compute_chase_order() -> void:
 	for t in 2:
 		var arr: Array = []
@@ -384,9 +388,41 @@ func _compute_chase_order() -> void:
 				arr.append([intercept_time(p), p.index])
 		arr.sort_custom(func(a, b): return a[0] < b[0])
 		var order: Array = []
+		var times := {}
 		for a in arr:
 			order.append(a[1])
+			times[a[1]] = a[0]
 		chase_order[t] = order
+		_pick_presser(t, order, times)
+
+
+func _pick_presser(t: int, order: Array, times: Dictionary) -> void:
+	## Exactly one player per team chases the ball. A human-controlled player who is about
+	## as close as the best team-mate is the presser himself, so the AI does not join him.
+	## The choice is sticky (0.35 s margin) so two players do not swap and both run.
+	if order.is_empty():
+		presser[t] = -1
+		cover[t] = -1
+		return
+	var best: int = order[0]
+	for h in humans:
+		if h["team"] == t and h["player"] >= 0 and times.has(h["player"]):
+			if float(times[h["player"]]) <= float(times[best]) + 0.6:
+				best = h["player"]
+	var cur: int = presser[t]
+	if cur >= 0 and times.has(cur) and cur != best and (players[best] as SimPlayer).human < 0:
+		if float(times[cur]) <= float(times[best]) + 0.35 and (players[cur] as SimPlayer).can_act():
+			best = cur
+	presser[t] = best
+	# cover: the next quickest defender or midfielder, if he is reasonably near
+	cover[t] = -1
+	for idx in order:
+		if idx == best:
+			continue
+		var q := players[idx] as SimPlayer
+		if q.role != "FWD" and q.human < 0:
+			cover[t] = idx
+			break
 
 
 func chase_rank(p: SimPlayer) -> int:
@@ -397,25 +433,34 @@ func intercept_time(p: SimPlayer) -> float:
 	if ball.owner >= 0:
 		return p.pos.distance_to(ball_flat()) / p.max_speed()
 	var sp := p.max_speed()
+	var top := _reach_y(p)
 	for k in ball_path.size():
 		var t := (k + 1) * PATH_DT
 		var bp := ball_path[k]
-		if bp.y > 2.0:
+		if bp.y > top:
 			continue
 		if Vector2(bp.x, bp.z).distance_to(p.pos) <= sp * t + C.CONTROL_DIST:
 			return t
 	return PATH_N * PATH_DT + p.pos.distance_to(ball_flat()) / sp
 
 
+func _reach_y(p: SimPlayer) -> float:
+	## Highest ball a player plans to meet: the receiver of a lob goes where it drops to
+	## his chest, everyone else also counts balls he could head.
+	return C.CHEST_MAX_Y - 0.1 if p.index == pass_target else 2.0
+
+
 func intercept_point(p: SimPlayer) -> Vector2:
 	if ball.owner >= 0:
+		# go for the ball in front of the carrier, not his back
 		var o := players[ball.owner] as SimPlayer
-		return o.pos + o.vel * 0.25
+		return ball_flat() + o.vel * 0.3
 	var sp := p.max_speed()
+	var top := _reach_y(p)
 	for k in ball_path.size():
 		var t := (k + 1) * PATH_DT
 		var bp := ball_path[k]
-		if bp.y > 2.0:
+		if bp.y > top:
 			continue
 		var f := Vector2(bp.x, bp.z)
 		if f.distance_to(p.pos) <= sp * t + C.CONTROL_DIST:
@@ -545,7 +590,26 @@ func _auto_switch() -> void:
 
 # ------------------------------------------------------------------ actions
 
+var _instant_kick := false     # first-time actions skip the wind-up
+
+
 func kick(p: SimPlayer, v: Vector3, kind: String) -> void:
+	## A kick from the feet has a short wind-up: the ball stays at the foot until the
+	## kicking leg reaches it, so the animation and the ball leaving agree.
+	if ball.owner == p.index and p.state == C.ST_RUN and kind != "flick" and not _instant_kick:
+		p.set_state(C.ST_KICK, C.KICK_WINDUP + 0.22)
+		p.kick_t = C.KICK_WINDUP
+		p.pending_v = v
+		p.pending_kind = kind
+		p.buf_action = C.ACT_NONE
+		if kind != "shot":
+			shot_live = false
+		events.append({"type": "windup", "kind": kind, "by": p.index})
+		return
+	_release_kick(p, v, kind)
+
+
+func _release_kick(p: SimPlayer, v: Vector3, kind: String) -> void:
 	ball.owner = -1
 	if v.length() > C.BALL_MAX_SPEED:
 		v = v.normalized() * C.BALL_MAX_SPEED
@@ -556,6 +620,7 @@ func kick(p: SimPlayer, v: Vector3, kind: String) -> void:
 	penalty_lock = false
 	p.touch_cd = C.TOUCH_COOLDOWN
 	p.buf_action = C.ACT_NONE
+	p.kick_t = 0.0
 	if p.state == C.ST_RUN or p.state == C.ST_HOLD:
 		p.set_state(C.ST_KICK, 0.22)
 	if kind != "shot":
@@ -636,7 +701,7 @@ func lob_to(p: SimPlayer, at: Vector2, receiver: int) -> void:
 	var dist := maxf(d.length(), 2.0)
 	var t := clampf(dist / C.LOB_SPEED_H, 0.75, 1.6)
 	var vh := dist / t * (1.0 + C.BALL_AIR_DRAG * t * 0.5)
-	var vy := (1.4 - ball.pos.y) / t + 0.5 * C.GRAVITY * t
+	var vy := (C.LOB_ARRIVE_Y - ball.pos.y) / t + 0.5 * C.GRAVITY * t
 	var sigma := lerpf(8.0, 2.0, C.stat01(p.data.stat("pas")))
 	var dir := _noise_dir(d.normalized(), sigma)
 	vh *= 1.0 + rng.randfn(0.0, 0.05)
@@ -742,6 +807,13 @@ func _update_state(p: SimPlayer, dt: float) -> void:
 		C.ST_KICK:
 			p.state_t -= dt
 			p.vel *= 0.92
+			if p.kick_t > 0.0:
+				p.kick_t -= dt
+				if p.kick_t <= 0.0:
+					if ball.owner == p.index:
+						_release_kick(p, p.pending_v, p.pending_kind)
+					else:
+						p.kick_t = 0.0      # robbed during the wind-up
 			if p.state_t <= 0.0:
 				p.set_state(C.ST_RUN, 0.0)
 		C.ST_CELEBRATE:
@@ -829,7 +901,10 @@ func _acquire() -> void:
 			continue
 		if p.state == C.ST_SLIDE:
 			continue
-		if ball.pos.y > C.CONTROL_MAX_Y:
+		var max_y := C.CONTROL_MAX_Y
+		if p.index == pass_target and ball.vel.y < 0.0:
+			max_y = C.CHEST_MAX_Y        # the receiver of a lob takes it on the chest
+		if ball.pos.y > max_y:
 			continue
 		var d := p.pos.distance_to(bf)
 		if d < C.CONTROL_DIST and d < bd:
@@ -839,23 +914,10 @@ func _acquire() -> void:
 		return
 	var p := best
 	# buffered first-time action
-	if p.buf_action == C.ACT_SHOOT:
-		ball.owner = p.index
-		shoot(p, p.buf_dir, 0.75, 999.0, true)
-		return
-	if p.buf_action == C.ACT_PASS:
-		var t := choose_pass_target(p, p.buf_dir)
-		if t >= 0:
-			ball.owner = p.index
-			pass_to(p, players[t], true)
-			return
-	if p.buf_action == C.ACT_LOB:
-		var lt := choose_pass_target(p, p.buf_dir, true)
-		ball.owner = p.index
-		if lt >= 0:
-			lob_to(p, (players[lt] as SimPlayer).pos, lt)
-		else:
-			lob_to(p, p.pos + p.buf_dir.normalized() * 14.0, -1)
+	_instant_kick = true
+	var done := _first_time(p)
+	_instant_kick = false
+	if done:
 		return
 	var rel := (Vector2(ball.vel.x, ball.vel.z) - p.vel).length()
 	var limit := 15.0 + p.data.stat("pas") * 0.4
@@ -875,6 +937,29 @@ func _acquire() -> void:
 		p.touch_cd = 0.2
 		shot_live = false
 		events.append({"type": "deflect", "by": p.index})
+
+
+func _first_time(p: SimPlayer) -> bool:
+	## Buffered first-time action (pressed before the ball arrived). Returns true if used.
+	if p.buf_action == C.ACT_SHOOT:
+		ball.owner = p.index
+		shoot(p, p.buf_dir, 0.75, 999.0, true)
+		return true
+	if p.buf_action == C.ACT_PASS:
+		var t := choose_pass_target(p, p.buf_dir)
+		if t >= 0:
+			ball.owner = p.index
+			pass_to(p, players[t], true)
+			return true
+	if p.buf_action == C.ACT_LOB:
+		var lt := choose_pass_target(p, p.buf_dir, true)
+		ball.owner = p.index
+		if lt >= 0:
+			lob_to(p, (players[lt] as SimPlayer).pos, lt)
+		else:
+			lob_to(p, p.pos + p.buf_dir.normalized() * 14.0, -1)
+		return true
+	return false
 
 
 func _gain(p: SimPlayer) -> void:
@@ -1196,7 +1281,15 @@ func _keeper_ai(p: SimPlayer, dt: float) -> void:
 	var mul := 1.0
 	var threat := _shot_threat(p)
 	if not threat.is_empty():
-		target = Vector2(home.x, clampf(threat["z"], -C.GOAL_HW + 0.25, C.GOAL_HW - 0.25))
+		# the keeper reads the shot with an error: more for hard shots and weaker keepers
+		if p.gk_read_touch != touch_id:
+			p.gk_read_touch = touch_id
+			var k01 := C.stat01(p.data.stat("kep"))
+			var sp := ball.vel.length()
+			var lvl_gk: float = float(lvl.get("gk", 0.0)) if p.human < 0 else 0.0
+			var on_body := absf(threat["z"] - p.pos.y) < 0.45
+			p.gk_read_err = (0.25 if on_body else 1.0) * rng.randfn(0.0, lerpf(1.6, 0.55, k01) * clampf(sp / 22.0, 0.5, 1.4) * (1.0 - lvl_gk))
+		target = Vector2(home.x, clampf(threat["z"] + p.gk_read_err, -C.GOAL_HW + 0.25, C.GOAL_HW - 0.25))
 		mul = 1.35
 		var gap := target.distance_to(p.pos)
 		if gap > 0.5 and threat["t"] < 0.55 and p.gk_tried_shot != touch_id:
@@ -1230,6 +1323,10 @@ func _keeper_ai(p: SimPlayer, dt: float) -> void:
 
 
 func _keeper_saves() -> void:
+	## A keeper gets one try per touch, decided when the ball first comes within reach.
+	## The decision uses the ball's closest approach to his body over the next moment,
+	## not its current distance: a ball flying at the keeper's body is always stopped
+	## (caught or parried), only balls passing beside him at the edge of his reach can beat him.
 	if ball.owner >= 0:
 		return
 	for t in 2:
@@ -1240,8 +1337,9 @@ func _keeper_saves() -> void:
 			continue
 		var bf := ball_flat()
 		var d := bf.distance_to(p.pos)
-		var reach := C.GK_REACH + (C.GK_DIVE_REACH * 0.7 if p.state == C.ST_DIVE else 0.0)
-		var max_y := 2.55 if p.state == C.ST_DIVE else 2.45
+		var diving := p.state == C.ST_DIVE
+		var reach := C.GK_REACH + (C.GK_DIVE_REACH * 0.7 if diving else 0.0)
+		var max_y := 2.55 if diving else 2.45
 		if d > reach or ball.pos.y > max_y:
 			continue
 		var g := own_goal(t)
@@ -1256,27 +1354,44 @@ func _keeper_saves() -> void:
 		if p.gk_tried_shot == touch_id:
 			continue
 		p.gk_tried_shot = touch_id
-		var chance := 0.7 + k01 * 0.33 - (speed - 20.0) * 0.02 - (d / reach) * 0.2
-		if p.human < 0:
-			chance += float(level(t)["gk"])
-		chance = clampf(chance, 0.08, 0.96)
+		# closest approach of the ball to the keeper over the next 0.15 s
+		var v2 := Vector2(ball.vel.x, ball.vel.z)
+		var ahead := bf + v2 * 0.15
+		var closest := Geometry2D.get_closest_point_to_segment(p.pos, bf, ahead).distance_to(p.pos)
+		var body := 0.5 if not diving else 0.75     # a diving keeper covers more with his body
+		var chance: float
+		if closest < body and ball.pos.y < 2.0:
+			chance = 1.0
+		else:
+			var edge := clampf((closest - body) / maxf(reach - body, 0.1), 0.0, 1.0)
+			chance = 0.66 + k01 * 0.25 - (speed - 20.0) * 0.025 - edge * 0.6
+			if p.human < 0:
+				chance += float(level(t)["gk"])
+			chance = clampf(chance, 0.05, 0.95)
 		if rng.randf() < chance:
 			stats[t]["saves"] += 1
 			pstats[p.index]["saves"] += 1
 			if shot_live and shot_by >= 0 and (players[shot_by] as SimPlayer).team != t:
 				stats[1 - t]["on_target"] += 1
-			if speed < 14.0 + p.data.stat("kep") * 0.45 and d < 1.1:
+			if speed < 14.0 + p.data.stat("kep") * 0.45 and closest < 1.0:
 				_catch(p)
 				events.append({"type": "save", "by": p.index, "catch": true})
 			else:
+				# parry: away from goal and to the side the ball came from
 				var dirx := attack_dir(t)
-				var out := Vector3(dirx * speed * rng.randf_range(0.25, 0.45), rng.randf_range(2.5, 6.0), rng.randf_range(-7.0, 7.0))
+				var side := signf(bf.y - p.pos.y) if absf(bf.y - p.pos.y) > 0.05 else (1.0 if rng.randf() < 0.5 else -1.0)
+				var out := Vector3(dirx * speed * rng.randf_range(0.25, 0.45), rng.randf_range(2.5, 6.0), side * rng.randf_range(3.0, 8.0))
 				ball.vel = out
+				ball.pos = Vector3(p.pos.x + dirx * 0.45, ball.pos.y, ball.pos.z)
 				ball.last_touch = p.index
+				touch_id += 1
 				p.touch_cd = 0.4
 				shot_live = false
 				events.append({"type": "save", "by": p.index, "catch": false})
 		else:
+			# beaten: the dive is late, so the body does not end up on the ball's line
+			p.vel *= 0.35
+			p.touch_cd = 0.35
 			events.append({"type": "miss_save", "by": p.index})
 
 

@@ -257,6 +257,9 @@ func test_bicycle_kick_from_high_ball() -> void:
 	sim.ball.owner = -1
 	sim.ball.pos = Vector3(13.2, 1.2, 0)
 	sim.ball.vel = Vector3(0, 0.5, 0)
+	for sp in sim.players:
+		if sp != p:
+			(sp as SimPlayer).active = false
 	p.buffer(C.ACT_AERIAL, Vector2.ZERO)
 	var kind := -1
 	for i in 10:
@@ -373,3 +376,139 @@ func test_penalty_in_box() -> void:
 			if e["type"] == "kick" and e["kind"] == "shot":
 				shot = true
 	runner.check(shot, "AI takes the penalty")
+
+
+# ---- regressions from play-testing
+
+func test_fast_ball_beside_post_is_no_goal() -> void:
+	## A hard shot that hits the end board just outside the post must bounce out, not
+	## be pulled into the net (ball moves ~0.57 m per tick at full speed).
+	for dz: float in [0.12, 0.2, 0.35, 0.6]:
+		var b := SimBall.new()
+		b.reset(Vector2(C.HX - 6.0, C.GOAL_HW + dz))
+		b.vel = Vector3(C.BALL_MAX_SPEED, 0.6, 0.0)
+		for i in 90:
+			b.step(C.TICK)
+			if b.in_goal != 0:
+				break
+		runner.check(b.in_goal == 0, "board %.2f m outside the post counted as a goal" % dz)
+		runner.check(b.vel.x < 0.0, "ball should rebound off the board (dz %.2f)" % dz)
+
+
+func test_fast_ball_over_bar_is_no_goal() -> void:
+	for h: float in [C.GOAL_H + 0.1, C.GOAL_H + 0.4]:
+		var b := SimBall.new()
+		b.reset(Vector2(C.HX - 3.0, 0.0))
+		b.pos.y = h
+		b.vel = Vector3(C.BALL_MAX_SPEED, 0.5, 0.0)
+		for i in 60:
+			b.step(C.TICK)
+			if b.in_goal != 0:
+				break
+		runner.check(b.in_goal == 0, "ball over the bar at %.2f m counted as a goal" % h)
+
+
+func test_keeper_body_always_stops_ball_at_him() -> void:
+	## A shot straight at the keeper never goes through him.
+	var through := 0
+	for seed in 40:
+		var sim := _sim(100 + seed)
+		sim.phase = C.PH_PLAY
+		var gk := sim.keeper(1)
+		var g := sim.own_goal(1)
+		gk.pos = Vector2(g.x - C.GK_LINE_OFFSET, 0.3)
+		gk.vel = Vector2.ZERO
+		gk.state = C.ST_RUN
+		for sp in sim.players:
+			var q := sp as SimPlayer
+			if q != gk:
+				q.active = false
+		sim.ball.owner = -1
+		sim.ball.last_touch = 3
+		sim.touch_id += 1
+		sim.ball.pos = Vector3(g.x - 10.0, 0.9, 0.3)
+		sim.ball.vel = Vector3(28.0, 0.8, 0.0)
+		for i in 60:
+			sim.tick()
+			if sim.phase == C.PH_GOAL:
+				through += 1
+				break
+	runner.check(through == 0, "%d of 40 shots at the keeper's body went in" % through)
+
+
+func test_lob_reaches_receiver() -> void:
+	## A lob to a standing team-mate is controlled by him (chest/feet), not lost behind him.
+	var ok := 0
+	for seed in 10:
+		var sim := _sim(200 + seed)
+		sim.phase = C.PH_PLAY
+		var a := sim.players[2] as SimPlayer
+		var r := sim.players[3] as SimPlayer
+		for sp in sim.players:
+			var q := sp as SimPlayer
+			if q != a and q != r:
+				q.active = false
+		a.pos = Vector2(-8, 0)
+		r.pos = Vector2(6, 3)
+		a.vel = Vector2.ZERO
+		r.vel = Vector2.ZERO
+		sim.ball.reset(a.pos + Vector2(0.5, 0))
+		sim.ball.owner = a.index
+		sim.lob_to(a, r.pos, r.index)
+		for i in 180:
+			sim.tick()
+			if sim.ball.owner == r.index:
+				ok += 1
+				break
+	runner.check(ok >= 9, "lobs controlled by the receiver: %d/10" % ok)
+
+
+func test_kick_winds_up_before_ball_leaves() -> void:
+	var sim := _sim(13)
+	sim.phase = C.PH_PLAY
+	var p := sim.players[3] as SimPlayer
+	sim.ball.reset(p.pos + p.facing * 0.5)
+	sim.ball.owner = p.index
+	p.state = C.ST_RUN
+	sim.pass_to(p, sim.players[4])
+	runner.check(sim.ball.owner == p.index, "ball should stay at the foot during the backswing")
+	var left_at := -1
+	for i in 20:
+		sim.tick()
+		if sim.ball.owner != p.index:
+			left_at = i
+			break
+	runner.check(left_at >= 3 and left_at <= 9, "ball left after %d ticks" % left_at)
+
+
+func test_one_presser_per_team() -> void:
+	## Without the ball a team sends one player at it; the rest keep their places.
+	var chasers := 0
+	var samples := 0
+	var sim := _sim(21)
+	for i in 60 * 60:
+		sim.tick()
+		if sim.phase != C.PH_PLAY or i % 30 != 0 or sim.ball.owner < 0:
+			continue
+		var t := 1 - (sim.players[sim.ball.owner] as SimPlayer).team
+		var bf := sim.ball_flat()
+		for sp in sim.team_players(t, true):
+			var q := sp as SimPlayer
+			if q.pos.distance_to(bf) < 3.0:
+				chasers += 1
+		samples += 1
+	var avg := float(chasers) / maxf(samples, 1)
+	print("    defenders within 3 m of the carrier: %.2f" % avg)
+	runner.check(avg < 1.6, "too many defenders on the ball: %.2f" % avg)
+
+
+func test_speed_stat_matters() -> void:
+	var slow := PlayerData.new()
+	slow.stats["spd"] = 5
+	var fast := PlayerData.new()
+	fast.stats["spd"] = 17
+	var a := SimPlayer.new()
+	a.data = slow
+	var b := SimPlayer.new()
+	b.data = fast
+	runner.check(b.max_speed() - a.max_speed() > 2.0, "speed 17 vs 5 should differ by > 2 m/s (%.2f)" % (b.max_speed() - a.max_speed()))

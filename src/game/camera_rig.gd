@@ -37,7 +37,7 @@ func _apply(_dt: float) -> void:
 	match mode:
 		CAM_LOW:
 			fov = 44.0
-			eye = Vector3(fx * 0.95, 6.5, fz * 0.4 + 15.5)
+			eye = Vector3(fx * 0.95, 7.0, fz * 0.4 + C.HZ + 3.5)
 			at = Vector3(fx * 0.95, 0.8, fz * 0.6)
 		CAM_END:
 			fov = 50.0
@@ -50,7 +50,7 @@ func _apply(_dt: float) -> void:
 			at = Vector3(fx * 0.75, 0.0, fz * 0.25)
 		_:
 			fov = 38.0
-			eye = Vector3(fx * 0.9, 12.5, fz * 0.35 + 18.5)
+			eye = Vector3(fx * 0.9, 13.5, fz * 0.35 + C.HZ + 7.0)
 			at = Vector3(fx * 0.9, 0.0, fz * 0.6)
 	if shake > 0.0:
 		var t := Time.get_ticks_msec() / 1000.0
