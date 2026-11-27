@@ -9,13 +9,21 @@ func _ready() -> void:
 		var sum := Career.slot_summary(slot)
 		var row := Screen.hbox()
 		content.add_child(row)
-		row.add_child(Screen.cell("Slot %d" % (slot + 1), 110, UiTheme.ACCENT2, 24))
+		row.add_child(Screen.cell("SLOT %d" % (slot + 1), 84, UiTheme.MUTED, 18))
+		var main_b: Button
 		if sum == "":
-			row.add_child(UiTheme.button("New career", func(): _new(slot), 520))
+			main_b = UiTheme.button("+  New career", func(): _new(slot), 0)
 		else:
-			row.add_child(UiTheme.button("Continue: " + sum, func(): _open(slot), 520))
-			var del := UiTheme.button("Delete", func(): _delete(slot), 140)
-			row.add_child(del)
+			main_b = UiTheme.primary(UiTheme.button(sum, func(): _open(slot), 0))
+		main_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		main_b.custom_minimum_size.y = 58
+		row.add_child(main_b)
+		if sum != "":
+			row.add_child(UiTheme.button("Delete", func(): _delete(slot), 140))
+		else:
+			var gap := Control.new()          # keeps the rows the same width
+			gap.custom_minimum_size = Vector2(140, 0)
+			row.add_child(gap)
 	footer.add_child(UiTheme.button("Back", back, 200))
 	focus_first()
 

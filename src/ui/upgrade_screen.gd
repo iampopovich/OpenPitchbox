@@ -13,7 +13,7 @@ func _ready() -> void:
 	var s: Dictionary = c.last_summary
 	level = int(s.get("level", 0))
 	var sc: Array = s.get("score", [0, 0])
-	base("Full time", "%s %d - %d %s" % [c.team(s.get("home", 0)).name, sc[0], sc[1], c.team(s.get("away", 0)).name])
+	base("Full time", "%s %d - %d %s" % [c.team(s.get("home", 0)).name, sc[0], sc[1], c.team(s.get("away", 0)).name], 1100.0)
 	content.add_child(UiTheme.label("Performance points: %.1f   →   team level +%d" % [float(s.get("points", 0.0)), level], 26, UiTheme.ACCENT2))
 	var expl := UiTheme.label("Points come from goals scored and conceded, the result and the strength of the opponent. Each player raises one attribute by the level.", 18, UiTheme.MUTED)
 	expl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -51,7 +51,7 @@ func _ready() -> void:
 			for i in 6:
 				choices[i] = Career.auto_stat(t.players[i], t.role_of(i))
 			_refresh(), 220))
-	footer.add_child(UiTheme.button("Continue", _done, 240))
+	footer.add_child(UiTheme.primary(UiTheme.button("Continue", _done, 240)))
 	focus_first()
 	if OS.get_environment("OP_SHOT_ON") == "upgrade":
 		Game.capture_in(20)
