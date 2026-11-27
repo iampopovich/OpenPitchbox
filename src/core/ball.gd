@@ -97,7 +97,7 @@ func _collide_arena(ev: Array) -> void:
 		ev.append("wall")
 	# posts (vertical cylinders at the mouth edges)
 	if pos.y < C.GOAL_H + r:
-		for pz in [-C.GOAL_HW, C.GOAL_HW]:
+		for pz: float in [-C.GOAL_HW, C.GOAL_HW]:
 			var d := Vector2(pos.x - sx * C.HX, pos.z - pz)
 			var mind := r + C.POST_R
 			if d.length_squared() < mind * mind and d.length_squared() > 0.000001:
