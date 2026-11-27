@@ -21,6 +21,9 @@ func _initialize() -> void:
 	var t0 := Time.get_ticks_msec()
 	for f in files:
 		var script: GDScript = load("res://tests/" + f)
+		if script == null or not script.can_instantiate():
+			failures.append("%s: failed to load (parse error)" % f)
+			continue
 		var inst = script.new()
 		inst.set("runner", self)
 		for m in script.get_script_method_list():

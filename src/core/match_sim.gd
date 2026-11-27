@@ -1097,7 +1097,7 @@ func _keeper_saves() -> void:
 		if p.gk_tried_shot == touch_id:
 			continue
 		p.gk_tried_shot = touch_id
-		var chance := 0.6 + k01 * 0.38 - (speed - 20.0) * 0.02 - (d / reach) * 0.2
+		var chance := 0.64 + k01 * 0.36 - (speed - 20.0) * 0.02 - (d / reach) * 0.2
 		if p.human < 0:
 			chance += float(level(t)["gk"])
 		chance = clampf(chance, 0.08, 0.96)
