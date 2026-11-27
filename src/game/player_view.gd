@@ -17,12 +17,12 @@ var team_color := Color.RED
 const HIP_Y := 0.9
 
 
-func build(team: TeamData, pd: PlayerData, is_gk: bool) -> void:
-	var c1 := team.color1
-	var c2 := team.color2
+func build(kit1: Color, kit2: Color, pd: PlayerData, gk_kit: Color = Color(0, 0, 0, 0)) -> void:
+	var c1 := kit1
+	var c2 := kit2
+	var is_gk := gk_kit.a > 0.0
 	if is_gk:
-		# keepers wear a contrasting kit
-		c1 = Color("22c55e") if team.color1.g < 0.5 else Color("a855f7")
+		c1 = gk_kit
 		c2 = Color("111827")
 	team_color = c1
 	var skin: Color = Looks.SKIN[clampi(pd.skin, 0, Looks.SKIN.size() - 1)]

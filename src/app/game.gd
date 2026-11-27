@@ -30,6 +30,11 @@ func _ready() -> void:
 	_shot_frame = int(f) if f != "" else -1
 
 
+func capture_in(frames: int) -> void:
+	if _shot_path != "":
+		_shot_frame = _frame + frames
+
+
 func _process(_dt: float) -> void:
 	_frame += 1
 	if _shot_path != "" and _frame == _shot_frame:
