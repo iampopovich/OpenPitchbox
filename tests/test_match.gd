@@ -310,3 +310,66 @@ func test_team_keeps_shape() -> void:
 	print("    nearest team-mate %.2f m, players near ball %.2f" % [mean_nn, mean_crowd])
 	runner.check(mean_nn >= 4.5, "team-mates too close: %.2f m" % mean_nn)
 	runner.check(mean_crowd <= 3.8, "too many players around the ball: %.2f" % mean_crowd)
+
+
+func test_back_net_slopes() -> void:
+	## A high shot into the top of the goal is stopped by the sloping net before the back bar.
+	var b := SimBall.new()
+	b.reset(Vector2(15, 0))
+	b.pos.y = 2.0
+	b.vel = Vector3(22, 0.5, 0)
+	var max_x := 0.0
+	for i in 90:
+		b.step(C.TICK)
+		if b.pos.y > 1.6:
+			max_x = maxf(max_x, b.pos.x)
+	runner.check(b.in_goal == 1, "goal")
+	runner.check(max_x < C.HX + C.GOAL_DEPTH - 0.35, "high ball stopped by the slope, reached %.2f" % max_x)
+
+
+func test_foul_from_behind_gives_free_kick_and_card() -> void:
+	var sim := _sim(21)
+	sim.phase = C.PH_PLAY
+	var victim := sim.players[5] as SimPlayer
+	var tackler := sim.players[7] as SimPlayer
+	victim.pos = Vector2(0, 0)
+	victim.facing = Vector2(1, 0)
+	victim.vel = Vector2(4, 0)
+	sim.ball.owner = victim.index
+	victim.steal_guard = 0.0
+	tackler.pos = Vector2(-1.2, 0)
+	tackler.facing = Vector2(1, 0)
+	sim.start_slide(tackler, Vector2(1, 0))
+	var foul := {}
+	for i in 30:
+		sim.tick()
+		for e in sim.events:
+			if e["type"] == "foul":
+				foul = e
+		if not foul.is_empty():
+			break
+	runner.check(not foul.is_empty(), "foul expected")
+	runner.check(foul.get("card", "") != "", "card for a tackle from behind")
+	runner.check(sim.phase == C.PH_SETPIECE and sim.sp_team == 0, "free kick to the fouled team")
+
+
+func test_penalty_in_box() -> void:
+	var sim := _sim(22)
+	sim.phase = C.PH_PLAY
+	var victim := sim.players[5] as SimPlayer
+	sim._foul(sim.players[8], victim, false)
+	victim.pos = Vector2(C.HX - 2.0, 1.0)
+	sim.phase = C.PH_PLAY
+	sim.ball.owner = -1
+	sim._foul(sim.players[8], victim, false)
+	runner.check(sim.sp_penalty, "foul in the box gives a penalty")
+	runner.check(absf(sim.ball.pos.x - (C.HX - C.PENALTY_SPOT)) < 0.01, "ball on the spot")
+	var guard := 0
+	var shot := false
+	while guard < 400 and not shot:
+		sim.tick()
+		guard += 1
+		for e in sim.events:
+			if e["type"] == "kick" and e["kind"] == "shot":
+				shot = true
+	runner.check(shot, "AI takes the penalty")

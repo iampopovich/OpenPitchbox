@@ -79,6 +79,19 @@ func _collide_arena(ev: Array) -> void:
 			pos.x = sx * (C.HX + C.GOAL_DEPTH - r)
 			_reflect(Vector3(-sx, 0, 0), C.BALL_NET_REST)
 			ev.append("net")
+		# sloping back net: from the roof edge (NET_TOP_DEPTH, GOAL_H) down to (GOAL_DEPTH, 0)
+		var run := C.GOAL_DEPTH - C.NET_TOP_DEPTH
+		var a := absf(pos.x) - C.HX - C.NET_TOP_DEPTH
+		if a > -r:
+			var n2 := Vector2(C.GOAL_H, run).normalized()   # outward normal in (depth, height)
+			var dist := (a * C.GOAL_H + pos.y * run - C.GOAL_H * run) / Vector2(C.GOAL_H, run).length()
+			if dist > -r:
+				var push := dist + r
+				pos.x -= sx * n2.x * push
+				pos.y -= n2.y * push
+				_reflect(Vector3(-sx * n2.x, -n2.y, 0), C.BALL_NET_REST)
+				pos.y = maxf(pos.y, r)
+				ev.append("net")
 		if ax > C.HX:
 			if absf(pos.z) > C.GOAL_HW - r:
 				var sz := signf(pos.z)

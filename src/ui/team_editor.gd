@@ -62,7 +62,7 @@ func _ready() -> void:
 	var cam := Camera3D.new()
 	cam.fov = 32
 	sv.add_child(cam)
-	cam.look_at_from_position(Vector3(0, 1.7, 8.2), Vector3(0, 0.95, 0), Vector3.UP)
+	cam.look_at_from_position(Vector3(0, 1.5, 6.6), Vector3(0, 1.0, 0), Vector3.UP)
 	var light := DirectionalLight3D.new()
 	light.rotation = Vector3(deg_to_rad(-40), deg_to_rad(25), 0)
 	light.shadow_enabled = true
@@ -135,13 +135,13 @@ func _rebuild_player_box() -> void:
 	player_box.add_child(Screen.cycler("Skin", ["1", "2", "3", "4", "5", "6"], pd.skin, func(i):
 		pd.skin = i
 		_rebuild_preview(), 540))
-	player_box.add_child(Screen.cycler("Hair", Looks.HAIR_NAMES, pd.hair, func(i):
+	player_box.add_child(Screen.cycler("Hair", Looks.HAIR_NAMES, pd.hair % Looks.HAIR_NAMES.size(), func(i):
 		pd.hair = i
 		_rebuild_preview(), 540))
 	player_box.add_child(Screen.cycler("Hair colour", ["Black", "Dark brown", "Brown", "Blond", "Red", "Grey"], pd.hair_color, func(i):
 		pd.hair_color = i
 		_rebuild_preview(), 540))
-	player_box.add_child(Screen.cycler("Beard", Looks.BEARD_NAMES, pd.beard, func(i):
+	player_box.add_child(Screen.cycler("Beard", Looks.BEARD_NAMES, mini(pd.beard, 1), func(i):
 		pd.beard = i
 		_rebuild_preview(), 540))
 	var stats := "  ".join(C.STAT_KEYS.map(func(k): return "%s %d" % [k.to_upper(), pd.stat(k)]))
@@ -166,9 +166,9 @@ func _rebuild_preview() -> void:
 		preview_root.add_child(v)
 		var gk := Color("22c55e") if i == 0 else Color(0, 0, 0, 0)
 		v.build(team.color1, team.color2, team.players[i], gk)
-		var x := (i - 2.5) * 0.85
+		var x := (i - 2.5) * 0.72
 		v.pose(Vector2(x, 0), PI * 0.5, C.ST_RUN, 0, 0.0, 0.0, 0.0)
-		v.rotation.y = PI if i != sel else PI - 0.35
+		v.rotation.y = 0.0 if i != sel else 0.4
 		v.set_controller(0 if i == sel else -1)
 		v.tag.visible = false
 

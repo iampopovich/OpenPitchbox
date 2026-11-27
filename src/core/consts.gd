@@ -13,6 +13,7 @@ const CORNER_R := 3.0
 const GOAL_HW := 2.6
 const GOAL_H := 2.3
 const GOAL_DEPTH := 1.6
+const NET_TOP_DEPTH := 0.6     # roof of the net before it slopes down to the ground
 const POST_R := 0.08
 const BOX_DEPTH := 6.0      # penalty box depth from the goal line
 const BOX_HW := 6.5         # penalty box half width
@@ -70,6 +71,9 @@ const GK_DIVE_TIME := 0.8
 const KICKOFF_DELAY := 1.2
 const GOAL_PAUSE := 3.0
 const REPLAY_SECONDS := 5.0
+const SETPIECE_DELAY := 1.6
+const PENALTY_SPOT := 4.2
+const WALL_DIST := 4.0
 
 # Player states
 enum { ST_RUN, ST_SLIDE, ST_RECOVER, ST_DOWN, ST_AERIAL, ST_DIVE, ST_KICK, ST_CELEBRATE, ST_HOLD }
@@ -78,7 +82,7 @@ enum { ST_RUN, ST_SLIDE, ST_RECOVER, ST_DOWN, ST_AERIAL, ST_DIVE, ST_KICK, ST_CE
 enum { ACT_NONE, ACT_PASS, ACT_SHOOT, ACT_LOB, ACT_AERIAL }
 
 # Phases
-enum { PH_KICKOFF, PH_PLAY, PH_GOAL, PH_FULLTIME }
+enum { PH_KICKOFF, PH_PLAY, PH_GOAL, PH_FULLTIME, PH_SETPIECE }
 
 const STAT_KEYS := ["spd", "sht", "pas", "tkl", "kep"]
 const STAT_NAMES := {"spd": "Speed", "sht": "Shooting", "pas": "Passing", "tkl": "Tackling", "kep": "Keeping"}

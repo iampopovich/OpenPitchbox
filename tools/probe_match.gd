@@ -31,6 +31,8 @@ func _initialize() -> void:
 						saves += 1
 					"miss_save":
 						miss += 1
+					"foul":
+						kinds["FOUL" + ("_pen" if e["penalty"] else "") + ("_" + e["card"] if e["card"] != "" else "")] = kinds.get("FOUL" + ("_pen" if e["penalty"] else "") + ("_" + e["card"] if e["card"] != "" else ""), 0) + 1
 	print("kicks: ", kinds)
 	print("goals after: ", goals_by, " total ", total_goals)
 	print("saves ", saves, " missed saves ", miss)

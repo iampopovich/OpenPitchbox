@@ -11,6 +11,8 @@ func _ready() -> void:
 	content.add_child(Screen.cycler("Default camera", CameraRig.NAMES, int(st.get("camera", 0)), func(i): _setv("camera", i)))
 	content.add_child(Screen.cycler("Goal replays", ["On", "Off"], 0 if st.get("replays", true) else 1, func(i): _setv("replays", i == 0)))
 	content.add_child(Screen.cycler("Auto switch on defence", ["On", "Off"], 0 if st.get("auto_switch", true) else 1, func(i): _setv("auto_switch", i == 0)))
+	content.add_child(Screen.cycler("Player markers", ["All players", "Controlled only"], 0 if st.get("markers", "all") == "all" else 1, func(i): _setv("markers", "all" if i == 0 else "human")))
+	content.add_child(Screen.cycler("Fouls and cards", ["On", "Off (classic arcade)"], 0 if st.get("fouls", true) else 1, func(i): _setv("fouls", i == 0)))
 	content.add_child(Screen.cycler("Display", ["Window", "Fullscreen"], 1 if st.get("fullscreen", false) else 0, func(i): Game.set_fullscreen(i == 1)))
 	content.add_child(UiTheme.label("Controls", 26, UiTheme.ACCENT2))
 	var help := """Gamepad:  stick move · A pass · B shoot (hold for power) / slide tackle · Y lob · X volley / header / bicycle kick
