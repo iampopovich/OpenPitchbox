@@ -36,7 +36,17 @@ func setup(config: Dictionary) -> void:
 	cfg = config
 
 
+var _prof := {}     # debug timings (ms), logged on phones in debug builds
+
+
+func _mark(key: String, t0: int) -> int:
+	var t1 := Time.get_ticks_usec()
+	_prof[key] = float(_prof.get(key, 0.0)) + (t1 - t0) / 1000.0
+	return t1
+
+
 func _ready() -> void:
+	var t0 := Time.get_ticks_usec()
 	sim = MatchSim.new()
 	var humans: Array = []
 	for h in cfg.get("humans", []):
@@ -57,9 +67,11 @@ func _ready() -> void:
 		"humans": humans,
 		"kickoff": cfg.get("kickoff", 0),
 	})
+	t0 = _mark("load_sim", t0)
 	arena = ArenaView.new()
 	add_child(arena)
 	arena.build(cfg["teams"][0], cfg["teams"][1])
+	t0 = _mark("load_arena", t0)
 	ball_view = BallView.new()
 	add_child(ball_view)
 	ball_view.build()
@@ -71,9 +83,12 @@ func _ready() -> void:
 		var k: Array = kits[p.team]
 		v.build(k[0], k[1], p.data, k[2] if p.is_gk() else Color(0, 0, 0, 0))
 		v.team_marker = Game.settings.get("markers", "all") == "all"
+		if Game.dbg("no_players"):
+			v.model.visible = false
 		v.visible = p.active
 		views.append(v)
 		prev_pos.append(p.pos)
+	t0 = _mark("load_players", t0)
 	cam = CameraRig.new()
 	add_child(cam)
 	cam.mode = int(cfg.get("camera", 0))
@@ -106,6 +121,10 @@ func _ready() -> void:
 	add_child(sfx)
 	sfx.set_volume(float(Game.settings.get("volume", 0.8)) if Game else 0.8)
 	prev_ball = sim.ball.pos
+	t0 = _mark("load_rest", t0)
+	if OS.is_debug_build() and OS.has_feature("mobile"):
+		print("OPBX load ms ", _prof)
+		_prof.clear()
 	if OS.get_environment("OP_INPUT_BOT") != "":
 		var bot := InputBot.new()
 		bot.view = self
@@ -169,6 +188,12 @@ func _hint_text(dev: String) -> String:
 func _physics_process(_delta: float) -> void:
 	if paused or in_replay or done:
 		return
+	var pt0 := Time.get_ticks_usec()
+	_physics_body()
+	_mark("sim", pt0)
+
+
+func _physics_body() -> void:
 	prev_ball = sim.ball.pos
 	for i in sim.players.size():
 		prev_pos[i] = (sim.players[i] as SimPlayer).pos
@@ -197,6 +222,14 @@ func _physics_process(_delta: float) -> void:
 
 
 func _handle_events() -> void:
+	if Game.dbg("log_events"):
+		for e in sim.events:
+			if e.has("by") and (sim.players[e["by"]] as SimPlayer).human >= 0:
+				print("OPBX human ", e)
+		for h in sim.humans:
+			if sim.tick_n % 60 == 0 and h["player"] >= 0:
+				var hp := sim.players[h["player"]] as SimPlayer
+				print("OPBX human pos %.1f %.1f vel %.1f" % [hp.pos.x, hp.pos.y, hp.vel.length()])
 	for e in sim.events:
 		match e["type"]:
 			"kick":
@@ -277,7 +310,40 @@ func _show_fulltime() -> void:
 		Game.capture_in(60)
 
 
+var _prof_t := 0.0
+var _prof_n := 0
+
+
+var _frame_no := 0
+
+
+signal first_frame
+
+
 func _process(dt: float) -> void:
+	_frame_no += 1
+	if _frame_no == 3:
+		first_frame.emit()
+	if _frame_no <= 4 and OS.is_debug_build() and OS.has_feature("mobile"):
+		print("OPBX match frame %d dt %.0f ms" % [_frame_no, dt * 1000.0])
+	var t0 := Time.get_ticks_usec()
+	_process_body(dt)
+	if _frame_no <= 2 and OS.is_debug_build() and OS.has_feature("mobile"):
+		print("OPBX match frame %d script %.0f ms" % [_frame_no, (Time.get_ticks_usec() - t0) / 1000.0])
+	_mark("view", t0)
+	_prof_n += 1
+	_prof_t += dt
+	if _prof_t > 5.0 and OS.is_debug_build() and OS.has_feature("mobile"):
+		var line := "OPBX per frame ms:"
+		for k in _prof:
+			line += " %s %.1f" % [k, float(_prof[k]) / _prof_n]
+		print(line)
+		_prof.clear()
+		_prof_t = 0.0
+		_prof_n = 0
+
+
+func _process_body(dt: float) -> void:
 	router.poll(devices)
 	for dev in devices:
 		if router.pause_pressed(dev) and not done:
@@ -299,7 +365,9 @@ func _process(dt: float) -> void:
 			_pose_from_snapshot(replay_frames[int(replay_pos)], dt)
 	else:
 		var f := Engine.get_physics_interpolation_fraction() if not (paused or done) else 1.0
+		var tp := Time.get_ticks_usec()
 		_pose_from_sim(f, dt)
+		_mark("pose", tp)
 	arena.near_stand.visible = cam.mode != CameraRig.CAM_LOW
 	_update_mouse_anchor()
 	if touch:

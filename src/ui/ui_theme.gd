@@ -86,10 +86,15 @@ static func title(text: String) -> Label:
 	return l
 
 
+static func button_h() -> float:
+	## Taller targets for fingers (about 9 mm on a phone); same layout everywhere.
+	return 58.0 if OS.has_feature("mobile") else 48.0
+
+
 static func button(text: String, cb: Callable, min_w: float = 320.0) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(min_w, 48)
+	b.custom_minimum_size = Vector2(min_w, button_h())
 	b.pressed.connect(cb)
 	return b
 

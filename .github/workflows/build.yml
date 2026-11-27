@@ -62,7 +62,41 @@ jobs:
           cd build
           tar -czf OpenPitchbox-linux-x86_64.tar.gz -C linux .
           (cd windows && zip -qr ../OpenPitchbox-windows-x86_64.zip .)
-          sha256sum OpenPitchbox-linux-x86_64.tar.gz OpenPitchbox-windows-x86_64.zip > SHA256SUMS.txt
+
+      - name: Export Android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+        run: |
+          set -e
+          # the runner image ships the Android SDK and Java 17
+          mkdir -p ~/.config/godot
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' \
+            "$ANDROID_HOME" "$JAVA_HOME_17_X64" > ~/.config/godot/editor_settings-4.7.tres
+          mkdir -p build/android
+          if [ -n "$KEYSTORE_B64" ]; then
+            # release key kept in repository secrets: every release can update the previous one
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="$RUNNER_TEMP/release.keystore"
+            export GODOT_ANDROID_KEYSTORE_RELEASE_USER=openpitchbox
+            export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="$(printf %s "$KEYSTORE_PASS" | tr -d '\n')"
+            godot --headless --export-release "Android" build/android/OpenPitchbox.apk
+          else
+            # forks without the secret get a debug-signed build
+            keytool -genkeypair -keystore "$RUNNER_TEMP/debug.keystore" -alias androiddebugkey -storepass android \
+              -keypass android -keyalg RSA -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$RUNNER_TEMP/debug.keystore"
+            export GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey
+            export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android
+            godot --headless --export-debug "Android" build/android/OpenPitchbox.apk
+          fi
+          test -s build/android/OpenPitchbox.apk
+          cp build/android/OpenPitchbox.apk build/OpenPitchbox-android-arm64.apk
+
+      - name: Checksums
+        run: |
+          cd build
+          sha256sum OpenPitchbox-linux-x86_64.tar.gz OpenPitchbox-windows-x86_64.zip OpenPitchbox-android-arm64.apk > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
@@ -71,6 +105,7 @@ jobs:
           path: |
             build/OpenPitchbox-linux-x86_64.tar.gz
             build/OpenPitchbox-windows-x86_64.zip
+            build/OpenPitchbox-android-arm64.apk
             build/SHA256SUMS.txt
 
       - name: Release
@@ -78,5 +113,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" build/OpenPitchbox-linux-x86_64.tar.gz build/OpenPitchbox-windows-x86_64.zip build/SHA256SUMS.txt \
+          gh release create "$GITHUB_REF_NAME" build/OpenPitchbox-linux-x86_64.tar.gz build/OpenPitchbox-windows-x86_64.zip build/OpenPitchbox-android-arm64.apk build/SHA256SUMS.txt \
             --title "OpenPitchbox $GITHUB_REF_NAME" --notes "Builds made by CI from this tag. Verify with SHA256SUMS.txt."
