@@ -586,6 +586,12 @@ func _lights() -> void:
 	env.glow_intensity = 0.35
 	env.glow_bloom = 0.02
 	env.glow_hdr_threshold = 1.2
+	if Game.low_graphics():
+		# phones: no SSAO, one shadow split at short range, lighter glow
+		env.ssao_enabled = false
+		env.glow_bloom = 0.0
+		key.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+		key.directional_shadow_max_distance = 45.0
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.06
 	env.adjustment_saturation = 0.92

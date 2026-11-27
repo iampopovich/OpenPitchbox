@@ -15,6 +15,7 @@ var cam: CameraRig
 var hud: MatchHud
 var sfx: Sfx
 var router := InputRouter.new()
+var touch: TouchControls
 var devices: Array = []
 var human_device := {}       # human id -> device
 
@@ -42,7 +43,7 @@ func _ready() -> void:
 		humans.append({"id": h["id"], "team": h["team"]})
 		human_device[int(h["id"])] = h["device"]
 		devices.append(h["device"])
-	if not devices.has("kb1"):
+	if not devices.has("kb1") and not OS.has_feature("mobile"):
 		devices.append("kb1")   # Esc pauses even without a keyboard player
 	sim.setup(cfg["teams"][0], cfg["teams"][1], {
 		"seed": cfg.get("seed", randi()),
@@ -89,6 +90,18 @@ func _ready() -> void:
 	hud.camera_requested.connect(_cycle_camera)
 	hud.quit_requested.connect(_quit)
 	hud.continue_requested.connect(_continue)
+	if devices.has("touch"):
+		var layer := CanvasLayer.new()
+		layer.layer = 5
+		add_child(layer)
+		touch = TouchControls.new()
+		touch.device = "touch"
+		layer.add_child(touch)
+		touch.pause_pressed.connect(func():
+			if in_replay:
+				_end_replay()
+			elif not done:
+				_toggle_pause())
 	sfx = Sfx.new()
 	add_child(sfx)
 	sfx.set_volume(float(Game.settings.get("volume", 0.8)) if Game else 0.8)
@@ -100,6 +113,11 @@ func _ready() -> void:
 	hud.flash("KICK-OFF", "%s  vs  %s" % [sim.teams[0].name, sim.teams[1].name], 1.6)
 	if humans.size() > 0:
 		hud.hint.text = _hint_text(human_device[humans[0]["id"]])
+		if touch:
+			# keep the bottom edge free for thumbs: show the hint under the scoreboard
+			hud.hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+			hud.hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
+			hud.hint.position.y = 64
 
 
 static func color_dist(a: Color, b: Color) -> float:
@@ -139,6 +157,12 @@ func _hint_text(dev: String) -> String:
 		return "WASD move · J pass · K/Space shoot (hold = power) · L lob · I volley/bicycle · Q switch · Esc pause · C camera"
 	if dev == "kb2":
 		return "Arrows move · , pass · . shoot · / lob · ; volley/bicycle · ' switch"
+	if dev == "touch":
+		return "Left thumb moves · hold SHOOT for power · tap a button before the ball arrives for a first-time shot"
+	if dev == "mouse":
+		return "Point to run · left click pass · right click shoot (hold = power) · wheel click lob · Shift volley · Tab switch · Esc pause"
+	if dev.begins_with("remote"):
+		return "Phone controller: stick moves · PASS · SHOOT (hold) · LOB · VOLLEY · SWITCH"
 	return "A pass · B shoot · Y lob · X volley/bicycle · LB/RB switch · Start pause · Back camera"
 
 
@@ -277,6 +301,9 @@ func _process(dt: float) -> void:
 		var f := Engine.get_physics_interpolation_fraction() if not (paused or done) else 1.0
 		_pose_from_sim(f, dt)
 	arena.near_stand.visible = cam.mode != CameraRig.CAM_LOW
+	_update_mouse_anchor()
+	if touch:
+		touch.visible = not paused and not done
 	var bp := ball_view.mesh.position
 	cam.follow(Vector3(bp.x, 0, bp.z), dt)
 	var cp := OS.get_environment("OP_CAMPOS")
@@ -420,3 +447,19 @@ func _result(aborted: bool) -> Dictionary:
 		"goals": sim.goals_log.duplicate(true),
 		"overtime": sim.overtime,
 	}
+
+
+func _update_mouse_anchor() -> void:
+	## The mouse player steers towards the cursor relative to his own footballer on screen.
+	VirtualPads.mouse_anchor = Vector2(-1, -1)
+	for h in sim.humans:
+		if human_device.get(h["id"], "") == "mouse" and h["player"] >= 0:
+			var v := views[h["player"]] as PlayerView
+			var c := get_viewport().get_camera_3d()
+			if c and not c.is_position_behind(v.global_position):
+				VirtualPads.mouse_anchor = c.unproject_position(v.global_position + Vector3(0, 0.9, 0))
+
+
+func pause_from_app() -> void:
+	if not paused and not done and not in_replay:
+		_toggle_pause()

@@ -29,10 +29,14 @@ func _ready() -> void:
 		s.practice = true
 		Game.show_menu(s)))
 	vb.add_child(UiTheme.button("Options", func(): Game.show_menu(OptionsScreen.new())))
+	if VirtualPads.touch_available():
+		vb.add_child(UiTheme.button("Use phone as controller", func(): Game.show_menu(ControllerScreen.new())))
 	vb.add_child(UiTheme.button("Quit", func(): get_tree().quit()))
 	var ver := UiTheme.label("MIT licensed · github.com/iampopovich/OpenPitchbox", 16, UiTheme.MUTED)
-	ver.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	ver.position = Vector2(20, -34)
+	ver.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ver.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	ver.position.y -= 34
 	add_child(ver)
 	focus_first()
 
