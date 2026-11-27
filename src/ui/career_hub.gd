@@ -10,7 +10,7 @@ func _ready() -> void:
 	c = Game.career
 	if view_div < 0:
 		view_div = c.user_div()
-	base(c.user().name, "Season %d · %s · %s" % [c.season, Career.div_name(c.user_div()), c.stage_label()])
+	base(c.user().name, "Season %d · %s · %s" % [c.season, Career.div_name(c.user_div()), c.stage_label()], 1120.0)
 	var row := Screen.hbox(28)
 	content.add_child(row)
 	var left := VBoxContainer.new()
@@ -21,29 +21,40 @@ func _ready() -> void:
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(right)
 	_fixture_panel(left)
-	left.add_child(UiTheme.button("Squad & upgrades", func(): Game.show_menu(SquadScreen.new()), 400))
-	left.add_child(UiTheme.button("Edit team", func():
-		var ed := TeamEditor.new()
-		ed.team = c.user()
-		Game.show_menu(ed), 400))
-	left.add_child(UiTheme.button("League leaders", func(): Game.show_menu(LeadersScreen.new()), 400))
-	left.add_child(UiTheme.button("History", func(): Game.show_menu(HistoryScreen.new()), 400))
-	left.add_child(UiTheme.button("Export league CSV", func():
-		var path := LeagueIO.export_league(c.teams, c.divisions)
-		left.get_node("Status").text = "Written to " + path, 400))
+	# secondary destinations in a compact 2×2 grid under the fixture card
+	var nav := GridContainer.new()
+	nav.columns = 2
+	nav.add_theme_constant_override("h_separation", 10)
+	nav.add_theme_constant_override("v_separation", 10)
+	left.add_child(nav)
+	var links := [
+		["Squad", func(): Game.show_menu(SquadScreen.new())],
+		["Edit team", func():
+			var ed := TeamEditor.new()
+			ed.team = c.user()
+			Game.show_menu(ed)],
+		["Leaders", func(): Game.show_menu(LeadersScreen.new())],
+		["History", func(): Game.show_menu(HistoryScreen.new())],
+	]
+	for l: Array in links:
+		var nb := UiTheme.button(l[0], l[1], 195)
+		nb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nav.add_child(nb)
 	var status := UiTheme.label("", 16, UiTheme.MUTED)
 	status.name = "Status"
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status.custom_minimum_size = Vector2(400, 0)
 	left.add_child(status)
-	left.add_child(UiTheme.button("Save & exit", func():
-		Game.save_career()
-		Game.career = null
-		Game.show_menu(), 400))
+	footer.add_child(UiTheme.button("Save & exit", back, 220))
+	footer.add_child(UiTheme.button("Export league CSV", func():
+		var path := LeagueIO.export_league(c.teams, c.divisions)
+		status.text = "Written to " + path, 260))
 	right.add_child(Screen.cycler("Table", [Career.div_name(0), Career.div_name(1), Career.div_name(2), Career.div_name(3)], view_div, func(i):
 		var h := CareerHub.new()
 		h.view_div = i
 		Game.show_menu(h), 360))
+	right.get_child(0).size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	if c.phase == "playoffs" or c.phase == "offseason":
 		_bracket(right, view_div)
 	_table(right, view_div)
@@ -85,17 +96,37 @@ func _fixture_panel(parent: Control) -> void:
 		return
 	var h := c.team(fx[0])
 	var a := c.team(fx[1])
-	vb.add_child(UiTheme.label("Next: " + c.stage_label(), 20, UiTheme.MUTED))
-	for t in [h, a]:
-		var r := Screen.hbox(8)
-		r.add_child(UiTheme.chip((t as TeamData).color1, Vector2(12, 26)))
-		var nm := UiTheme.label((t as TeamData).name, 24, Color.WHITE if t == c.user() else UiTheme.TEXT)
-		r.add_child(nm)
-		vb.add_child(r)
-		vb.add_child(UiTheme.label("    %s  rating %.1f" % [UiTheme.stars_text((t as TeamData).stars()), (t as TeamData).rating()], 18, UiTheme.MUTED))
+	var cap := UiTheme.label("NEXT · " + c.stage_label().to_upper(), 16, UiTheme.MUTED)
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(cap)
+	var vs := Screen.hbox(10)
+	vs.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_child(vs)
+	for i: int in 2:
+		var t: TeamData = [h, a][i]
+		var col := VBoxContainer.new()
+		col.custom_minimum_size.x = 168
+		col.add_theme_constant_override("separation", 4)
+		var bar := UiTheme.chip(t.color1, Vector2(44, 6))
+		bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		col.add_child(bar)
+		var nm := UiTheme.label(t.name, 19, Color.WHITE if t == c.user() else UiTheme.TEXT)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(nm)
+		var rt := UiTheme.label("%s  %.1f" % [UiTheme.stars_text(t.stars()), t.rating()], 16, UiTheme.MUTED)
+		rt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(rt)
+		vs.add_child(col)
+		if i == 0:
+			var v := UiTheme.label("vs", 20, UiTheme.MUTED)
+			v.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			vs.add_child(v)
 	if fx[2]:
-		vb.add_child(UiTheme.label("Knockout: golden goal if level", 18, UiTheme.ACCENT2))
-	vb.add_child(UiTheme.button("Play match", func(): _play(fx), 370))
+		var ko := UiTheme.label("Knockout: golden goal if level", 16, UiTheme.ACCENT2)
+		ko.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vb.add_child(ko)
+	vb.add_child(UiTheme.primary(UiTheme.button("Play match", func(): _play(fx), 370)))
 
 
 func _play(fx: Array) -> void:
@@ -124,11 +155,11 @@ func _table(parent: Control, d: int) -> void:
 	var p := Screen.panel()
 	parent.add_child(p)
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 2)
+	vb.add_theme_constant_override("separation", 0)
 	p.add_child(vb)
 	var head := Screen.hbox(6)
 	for col in [["#", 36], ["Club", 250], ["P", 40], ["W", 40], ["D", 40], ["L", 40], ["GF", 46], ["GA", 46], ["Pts", 52]]:
-		head.add_child(Screen.cell(col[0], col[1], UiTheme.MUTED, 18, HORIZONTAL_ALIGNMENT_CENTER if col[0] != "Club" else HORIZONTAL_ALIGNMENT_LEFT))
+		head.add_child(Screen.cell(col[0], col[1], UiTheme.MUTED, 15, HORIZONTAL_ALIGNMENT_CENTER if col[0] != "Club" else HORIZONTAL_ALIGNMENT_LEFT))
 	vb.add_child(head)
 	var st := c.standings(d)
 	for i in st.size():
@@ -139,10 +170,10 @@ func _table(parent: Control, d: int) -> void:
 		if tid == c.user_team:
 			col = UiTheme.ACCENT2
 		var pos_col := UiTheme.ACCENT if i < 8 else (Color("f87171") if i >= 14 and d < 3 else UiTheme.MUTED)
-		line.add_child(Screen.cell(str(i + 1), 36, pos_col, 18, HORIZONTAL_ALIGNMENT_CENTER))
-		line.add_child(Screen.cell(c.team(tid).name, 250, col, 18))
+		line.add_child(Screen.cell(str(i + 1), 36, pos_col, 16, HORIZONTAL_ALIGNMENT_CENTER))
+		line.add_child(Screen.cell(c.team(tid).name, 250, col, 16))
 		for k in ["p", "w", "d", "l", "gf", "ga", "pts"]:
-			line.add_child(Screen.cell(str(r[k]), 52 if k == "pts" else (46 if k in ["gf", "ga"] else 40), col, 18, HORIZONTAL_ALIGNMENT_CENTER))
+			line.add_child(Screen.cell(str(r[k]), 52 if k == "pts" else (46 if k in ["gf", "ga"] else 40), col, 16, HORIZONTAL_ALIGNMENT_CENTER))
 		vb.add_child(line)
 	var legend := UiTheme.label("green: playoff places (top 8)   red: relegation", 15, UiTheme.MUTED)
 	vb.add_child(legend)

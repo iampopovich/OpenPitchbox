@@ -13,18 +13,18 @@ var use_custom := false
 
 func _ready() -> void:
 	base("New career", "you take over a struggling Division 4 club")
-	content.add_child(UiTheme.label("Who plays (co-op on your team)", 24, UiTheme.ACCENT2))
+	content.add_child(Screen.section("Who plays (co-op on your team)"))
 	for dev in InputRouter.connected_devices():
 		devices[dev] = dev == "kb1"
-		content.add_child(Screen.cycler(InputRouter.device_label(dev), ["Off", "Playing"], 1 if devices[dev] else 0, func(i): devices[dev] = i == 1, 560))
-	content.add_child(UiTheme.label("Rules", 24, UiTheme.ACCENT2))
+		content.add_child(Screen.cycler(InputRouter.device_label(dev), ["Off", "Playing"], 1 if devices[dev] else 0, func(i): devices[dev] = i == 1))
+	content.add_child(Screen.section("Rules"))
 	content.add_child(Screen.cycler("Difficulty", MatchSetup.DIFFS, diff_i, func(i): diff_i = i))
 	content.add_child(Screen.cycler("Match length", MatchSetup.LENGTH_NAMES, length_i, func(i): length_i = i))
 	content.add_child(Screen.cycler("Player upgrades", ["Choose myself", "Automatic"], 0, func(i): auto_up = i == 1))
 	content.add_child(Screen.cycler("Mode", ["Team (switch players)", "Role-play (one player)"], 0, func(i): roleplay = i == 1))
 	if LeagueIO.has_league():
 		content.add_child(Screen.cycler("League", ["Built-in clubs", "Custom CSV league"], 0, func(i): use_custom = i == 1))
-	footer.add_child(UiTheme.button("Start", _create, 240))
+	footer.add_child(UiTheme.primary(UiTheme.button("Start", _create, 240)))
 	footer.add_child(UiTheme.button("Back", func(): Game.show_menu(CareerSlots.new()), 200))
 	focus_first()
 

@@ -94,6 +94,26 @@ static func button(text: String, cb: Callable, min_w: float = 320.0) -> Button:
 	return b
 
 
+static func primary(b: Button) -> Button:
+	## Highlights the main action of a screen (filled accent button).
+	var n := StyleBoxFlat.new()
+	n.bg_color = Color("15803d")
+	n.set_corner_radius_all(8)
+	n.set_content_margin_all(10)
+	n.content_margin_left = 22
+	n.content_margin_right = 22
+	var h := n.duplicate() as StyleBoxFlat
+	h.bg_color = Color("16a34a")
+	var f := h.duplicate() as StyleBoxFlat
+	f.border_color = Color.WHITE
+	f.set_border_width_all(3)
+	b.add_theme_stylebox_override("normal", n)
+	b.add_theme_stylebox_override("hover", h)
+	b.add_theme_stylebox_override("focus", f)
+	b.add_theme_color_override("font_color", Color.WHITE)
+	return b
+
+
 static func chip(c: Color, size: Vector2 = Vector2(18, 18)) -> ColorRect:
 	var r := ColorRect.new()
 	r.color = c

@@ -7,13 +7,14 @@ var scope := 0   # 0 = my division, 1 = all divisions
 
 func _ready() -> void:
 	var c: Career = Game.career
-	base("League leaders", "season %d" % c.season)
+	base("League leaders", "season %d" % c.season, 1160.0)
 	content.add_child(Screen.cycler("Scope", [Career.div_name(c.user_div()), "All divisions"], scope, func(i):
 		var s := LeadersScreen.new()
 		s.scope = i
 		Game.show_menu(s), 380))
 	var grid := GridContainer.new()
 	grid.columns = 2
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	grid.add_theme_constant_override("h_separation", 40)
 	grid.add_theme_constant_override("v_separation", 16)
 	content.add_child(grid)
@@ -23,8 +24,10 @@ func _ready() -> void:
 		grid.add_child(p)
 		var vb := VBoxContainer.new()
 		p.add_child(vb)
-		vb.add_child(UiTheme.label(key.capitalize(), 24, UiTheme.ACCENT2))
-		var rows := c.leaders(key, c.user_div() if scope == 0 else -1, 8)
+		var cap := UiTheme.label(key.to_upper(), 18, UiTheme.ACCENT2)
+		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vb.add_child(cap)
+		var rows := c.leaders(key, c.user_div() if scope == 0 else -1, 5)
 		if rows.is_empty():
 			vb.add_child(UiTheme.label("—", 18, UiTheme.MUTED))
 		for r in rows:

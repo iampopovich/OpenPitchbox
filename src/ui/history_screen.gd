@@ -5,7 +5,7 @@ extends Screen
 
 func _ready() -> void:
 	var c: Career = Game.career
-	base("History", c.user().name)
+	base("History", c.user().name, 900.0)
 	if c.history.is_empty():
 		content.add_child(UiTheme.label("No finished seasons yet.", 22, UiTheme.MUTED))
 	for h in c.history:

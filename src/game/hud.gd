@@ -20,6 +20,7 @@ var sub_banner: Label
 var replay_lbl: Label
 var power: ProgressBar
 var hint: Label
+var pause_layer: ColorRect
 var pause_panel: PanelContainer
 var cam_btn: Button
 var ft_panel: PanelContainer
@@ -106,15 +107,23 @@ func build(sim: MatchSim, title: String, shirt: Array) -> void:
 
 
 func _build_pause() -> void:
+	# dimmed full-screen layer with the menu card exactly in the middle
+	pause_layer = ColorRect.new()
+	pause_layer.color = Color(0, 0, 0, 0.45)
+	pause_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_layer.visible = false
+	root.add_child(pause_layer)
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_layer.add_child(cc)
 	pause_panel = PanelContainer.new()
-	pause_panel.set_anchors_preset(Control.PRESET_CENTER)
-	pause_panel.position = Vector2(-200, -170)
-	pause_panel.visible = false
-	root.add_child(pause_panel)
+	cc.add_child(pause_panel)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 10)
 	pause_panel.add_child(vb)
-	vb.add_child(UiTheme.title("Paused"))
+	var pt := UiTheme.title("Paused")
+	pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(pt)
 	vb.add_child(UiTheme.button("Resume", func(): resume_requested.emit()))
 	vb.add_child(UiTheme.button("Instant replay", func(): replay_requested.emit()))
 	cam_btn = UiTheme.button("Camera", func(): camera_requested.emit())
@@ -129,7 +138,7 @@ func set_quit_text(t: String) -> void:
 
 
 func show_pause(on: bool, cam_name: String) -> void:
-	pause_panel.visible = on
+	pause_layer.visible = on
 	cam_btn.text = "Camera: " + cam_name
 	if on:
 		(pause_panel.get_child(0).get_child(1) as Button).grab_focus()

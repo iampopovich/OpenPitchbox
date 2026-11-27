@@ -12,7 +12,7 @@ const COLOR_NAMES := ["Red", "Blue", "Green", "Yellow", "Orange", "Purple", "Nav
 
 
 func _ready() -> void:
-	base("Edit team", "you start with a random Division 4 club — make it yours" if first_time else "")
+	base("Edit team", "you start with a random Division 4 club — make it yours" if first_time else "", 1120.0)
 	var row := Screen.hbox(28)
 	content.add_child(row)
 	var left := VBoxContainer.new()
@@ -36,13 +36,13 @@ func _ready() -> void:
 	left.add_child(_labeled("Short name", short_edit))
 	left.add_child(Screen.cycler("Shirt", COLOR_NAMES, _color_index(team.color1), func(i):
 		team.color1 = TeamFactory.KIT_COLORS[i]
-		_rebuild_preview(), 540))
+		_rebuild_preview(), 0))
 	left.add_child(Screen.cycler("Shorts / trim", COLOR_NAMES, _color_index(team.color2), func(i):
 		team.color2 = TeamFactory.KIT_COLORS[i]
-		_rebuild_preview(), 540))
+		_rebuild_preview(), 0))
 	left.add_child(Screen.cycler("Formation", TeamData.FORMATION_ORDER, maxi(0, TeamData.FORMATION_ORDER.find(team.formation)), func(i):
 		team.formation = TeamData.FORMATION_ORDER[i]
-		_rebuild_player_box(), 540))
+		_rebuild_player_box(), 0))
 	player_box = VBoxContainer.new()
 	player_box.add_theme_constant_override("separation", 8)
 	left.add_child(player_box)
@@ -85,15 +85,43 @@ func _ready() -> void:
 	sv.add_child(floor_mi)
 	right.add_child(UiTheme.label("Slot order = positions: the first player is the keeper.", 16, UiTheme.MUTED))
 	_rebuild_player_box()
-	footer.add_child(UiTheme.button("Done", back, 240))
+	footer.add_child(UiTheme.primary(UiTheme.button("Done", back, 240)))
 	focus_first()
 
 
-func _labeled(text: String, ctrl: Control) -> HBoxContainer:
-	var h := Screen.hbox(10)
-	h.add_child(Screen.cell(text, 160, UiTheme.MUTED, 20))
+func _labeled(text: String, ctrl: Control) -> Control:
+	## Text field row styled like a cycler row: caption left, editable value right.
+	var box := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("1e293b")
+	sb.set_corner_radius_all(8)
+	sb.content_margin_left = 22
+	sb.content_margin_right = 10
+	box.add_theme_stylebox_override("panel", sb)
+	box.custom_minimum_size.y = 48
+	var h := Screen.hbox(12)
+	box.add_child(h)
+	var l := UiTheme.label(text, 21, UiTheme.MUTED)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(l)
+	ctrl.custom_minimum_size = Vector2(300, 40)
+	ctrl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if ctrl is LineEdit:
+		(ctrl as LineEdit).alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		var flat := StyleBoxFlat.new()
+		flat.bg_color = Color(0, 0, 0, 0)
+		flat.content_margin_right = 12
+		flat.content_margin_left = 12
+		var foc := flat.duplicate() as StyleBoxFlat
+		foc.bg_color = Color("14532d")
+		foc.border_color = UiTheme.ACCENT
+		foc.set_border_width_all(2)
+		foc.set_corner_radius_all(6)
+		ctrl.add_theme_stylebox_override("normal", flat)
+		ctrl.add_theme_stylebox_override("focus", foc)
 	h.add_child(ctrl)
-	return h
+	return box
 
 
 func _color_index(c: Color) -> int:
@@ -116,7 +144,7 @@ func _rebuild_player_box() -> void:
 		names.append("%s  %s" % [team.role_of(i), (team.players[i] as PlayerData).name])
 	player_box.add_child(Screen.cycler("Player", names, sel, func(i):
 		sel = i
-		_rebuild_player_box(), 540))
+		_rebuild_player_box(), 0))
 	var pd: PlayerData = team.players[sel]
 	var ne := LineEdit.new()
 	ne.text = pd.name
@@ -131,19 +159,19 @@ func _rebuild_player_box() -> void:
 		nums.append(n)
 	player_box.add_child(Screen.cycler("Number", nums, pd.number - 1, func(i):
 		pd.number = i + 1
-		_rebuild_preview(), 540))
+		_rebuild_preview(), 0))
 	player_box.add_child(Screen.cycler("Skin", ["1", "2", "3", "4", "5", "6"], pd.skin, func(i):
 		pd.skin = i
-		_rebuild_preview(), 540))
+		_rebuild_preview(), 0))
 	player_box.add_child(Screen.cycler("Hair", Looks.HAIR_NAMES, pd.hair % Looks.HAIR_NAMES.size(), func(i):
 		pd.hair = i
-		_rebuild_preview(), 540))
+		_rebuild_preview(), 0))
 	player_box.add_child(Screen.cycler("Hair colour", ["Black", "Dark brown", "Brown", "Blond", "Red", "Grey"], pd.hair_color, func(i):
 		pd.hair_color = i
-		_rebuild_preview(), 540))
+		_rebuild_preview(), 0))
 	player_box.add_child(Screen.cycler("Beard", Looks.BEARD_NAMES, mini(pd.beard, 1), func(i):
 		pd.beard = i
-		_rebuild_preview(), 540))
+		_rebuild_preview(), 0))
 	var stats := "  ".join(C.STAT_KEYS.map(func(k): return "%s %d" % [k.to_upper(), pd.stat(k)]))
 	player_box.add_child(UiTheme.label(stats, 18, UiTheme.MUTED))
 	if sel > 0:
@@ -152,7 +180,7 @@ func _rebuild_player_box() -> void:
 			team.players[sel - 1] = team.players[sel]
 			team.players[sel] = tmp
 			sel -= 1
-			_rebuild_player_box(), 540))
+			_rebuild_player_box(), 0))
 	_rebuild_preview()
 
 

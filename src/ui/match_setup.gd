@@ -20,7 +20,7 @@ const DIFFS := ["Easy", "Normal", "Hard", "Pro"]
 
 
 func _ready() -> void:
-	base("Practice" if practice else "Exhibition", "the opposition only fields a keeper" if practice else "")
+	base("Practice" if practice else "Exhibition", "the opposition only fields a keeper" if practice else "", 760.0)
 	teams = Game.world_teams().duplicate()
 	if Game.career:
 		teams.insert(0, Game.career.user())
@@ -34,33 +34,37 @@ func _ready() -> void:
 	var row := Screen.hbox(30)
 	content.add_child(row)
 	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(left)
 	left.add_child(Screen.cycler("Home", names, home_i, func(i):
 		home_i = i
 		_refresh()))
 	home_info = UiTheme.label("", 18, UiTheme.MUTED)
+	home_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	left.add_child(home_info)
 	if not practice:
 		var right := VBoxContainer.new()
+		right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(right)
 		right.add_child(Screen.cycler("Away", names, away_i, func(i):
 			away_i = i
 			_refresh()))
 		away_info = UiTheme.label("", 18, UiTheme.MUTED)
+		away_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		right.add_child(away_info)
-	content.add_child(UiTheme.label("Controllers", 26, UiTheme.ACCENT2))
+	content.add_child(Screen.section("Controllers"))
 	var devs := InputRouter.connected_devices()
 	for dev in devs:
 		assign[dev] = 1 if dev == "kb1" else 0
 		var sides := ["CPU", "Home"] if practice else ["CPU", "Home", "Away"]
-		content.add_child(Screen.cycler(InputRouter.device_label(dev), sides, assign[dev], func(i): assign[dev] = i, 560))
-	content.add_child(UiTheme.label("Match", 26, UiTheme.ACCENT2))
+		content.add_child(Screen.cycler(InputRouter.device_label(dev), sides, assign[dev], func(i): assign[dev] = i))
+	content.add_child(Screen.section("Match"))
 	if not practice:
 		content.add_child(Screen.cycler("Length", LENGTH_NAMES, length_i, func(i): length_i = i))
 		content.add_child(Screen.cycler("Difficulty", DIFFS, diff_i, func(i): diff_i = i))
 	content.add_child(Screen.cycler("Camera", CameraRig.NAMES, cam_i, func(i): cam_i = i))
 	content.add_child(Screen.cycler("Mode", ["Team (switch players)", "Role-play (one player)"], 0, func(i): roleplay = i == 1))
-	footer.add_child(UiTheme.button("Kick off", _start, 260))
+	footer.add_child(UiTheme.primary(UiTheme.button("Kick off", _start, 260)))
 	footer.add_child(UiTheme.button("Back", back, 200))
 	_refresh()
 	focus_first()
