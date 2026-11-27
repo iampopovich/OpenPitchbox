@@ -16,13 +16,14 @@ func _initialize() -> void:
 		for mi in _all(n, "MeshInstance3D"):
 			aabb = aabb.merge((mi as MeshInstance3D).get_aabb())
 		print("mesh aabb ", aabb)
-	var an: PackedScene = load("res://assets/third_party/quaternius/anim/UAL2_Standard.glb")
+	var an: PackedScene = load("res://assets/third_party/cmu/cmu_football.glb")
 	var a := an.instantiate()
 	var ap := _find(a, "AnimationPlayer") as AnimationPlayer
 	if ap:
 		var lst := ap.get_animation_list()
 		for nm in lst:
-			print("anim ", nm, " ", snappedf(ap.get_animation(nm).length, 0.01))
+			var an2 := ap.get_animation(nm)
+			print("anim ", nm, " ", snappedf(an2.length, 0.01), " tracks ", an2.get_track_count(), " first ", an2.track_get_path(0), " ", an2.track_get_type(0))
 	var sk2 := _find(a, "Skeleton3D") as Skeleton3D
 	if sk2:
 		print("anim skeleton bones ", sk2.get_bone_count(), " first ", sk2.get_bone_name(0), " path ", a.get_path_to(sk2))

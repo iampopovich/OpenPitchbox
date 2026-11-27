@@ -93,6 +93,10 @@ func _ready() -> void:
 	add_child(sfx)
 	sfx.set_volume(float(Game.settings.get("volume", 0.8)) if Game else 0.8)
 	prev_ball = sim.ball.pos
+	if OS.get_environment("OP_INPUT_BOT") != "":
+		var bot := InputBot.new()
+		bot.view = self
+		add_child(bot)
 	hud.flash("KICK-OFF", "%s  vs  %s" % [sim.teams[0].name, sim.teams[1].name], 1.6)
 	if humans.size() > 0:
 		hud.hint.text = _hint_text(human_device[humans[0]["id"]])
@@ -192,6 +196,7 @@ func _handle_events() -> void:
 				arena.cheer(0.4)
 			"catch":
 				sfx.play("catch", -6.0)
+				(views[e["by"]] as PlayerView).catch_low = sim.ball.pos.y < 0.8 or prev_ball.y < 0.6
 			"whistle":
 				sfx.play("whistle", -4.0)
 			"foul":
@@ -297,6 +302,8 @@ func _camera_key() -> bool:
 
 func _pose_from_sim(f: float, dt: float) -> void:
 	var bp := prev_ball.lerp(sim.ball.pos, f)
+	if sim.ball.owner >= 0 and (sim.players[sim.ball.owner] as SimPlayer).state == C.ST_HOLD:
+		bp = (views[sim.ball.owner] as PlayerView).hands_pos()
 	ball_view.show_at(bp, sim.ball.vel, dt)
 	for i in sim.players.size():
 		var p := sim.players[i] as SimPlayer
