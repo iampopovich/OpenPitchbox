@@ -13,6 +13,8 @@ var settings := {
 	"fullscreen": false,
 }
 var career = null          # Career, when one is open
+var career_slot := 0
+var _world: Array = []
 var _current: Node = null
 
 
@@ -86,7 +88,35 @@ func show_menu(menu: Node = null) -> void:
 
 
 func play_match(cfg: Dictionary, on_done: Callable) -> void:
+	## The calling screen is detached (not freed) so callbacks bound to it stay valid.
+	var caller := _current
+	if caller and is_instance_valid(caller) and caller.is_inside_tree():
+		caller.get_parent().remove_child(caller)
+	_current = null
 	var mv := MatchView.new()
 	mv.setup(cfg)
-	mv.finished.connect(func(result): on_done.call(result))
+	mv.finished.connect(func(result):
+		on_done.call(result)
+		if caller and is_instance_valid(caller) and not caller.is_inside_tree():
+			caller.queue_free())
 	switch_to(mv)
+
+
+func world_teams() -> Array:
+	## The 64 clubs used for exhibition matches (custom CSV league if present).
+	if _world.is_empty():
+		var lg := LeagueIO.import_league() if LeagueIO.has_league() else {}
+		if lg.has("teams"):
+			_world = lg["teams"]
+		else:
+			_world = Career.create(2026).teams
+	return _world
+
+
+func reload_world() -> void:
+	_world.clear()
+
+
+func save_career() -> void:
+	if career:
+		career.save(career_slot)
