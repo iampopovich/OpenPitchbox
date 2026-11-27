@@ -8,7 +8,7 @@ func _ready() -> void:
 	if OS.get_environment("OP_AUTOPLAY") != "":
 		var pair := TeamFactory.quick_pair(int(OS.get_environment("OP_SEED")) if OS.get_environment("OP_SEED") != "" else 3)
 		var cam := int(OS.get_environment("OP_CAMERA")) if OS.get_environment("OP_CAMERA") != "" else 0
-		var humans: Array = [{"id": 0, "team": 0, "device": "kb1"}] if OS.get_environment("OP_HUMAN") != "" else []
+		var humans: Array = [{"id": 0, "team": 0, "device": OS.get_environment("OP_DEVICE") if OS.get_environment("OP_DEVICE") != "" else "kb1"}] if OS.get_environment("OP_HUMAN") != "" else []
 		Game.play_match({"teams": pair, "humans": humans, "length": 120.0, "camera": cam, "seed": 5}, func(_r): get_tree().quit())
 		return
 	var screen := OS.get_environment("OP_SCREEN")

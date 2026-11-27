@@ -133,7 +133,10 @@ func _play(fx: Array) -> void:
 	var user_home: bool = fx[0] == c.user_team
 	var humans: Array = []
 	var id := 0
-	for dev in c.opts.get("devices", ["kb1"]):
+	var devs: Array = c.opts.get("devices", ["kb1"]).filter(func(d): return InputRouter.connected_devices().has(d))
+	if devs.is_empty():
+		devs = [InputRouter.default_device()]
+	for dev in devs:
 		humans.append({"id": id, "team": 0 if user_home else 1, "device": dev})
 		id += 1
 	var diff := int(c.opts.get("difficulty", 1))

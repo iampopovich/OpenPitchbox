@@ -13,7 +13,14 @@ var settings := {
 	"fullscreen": false,
 	"fouls": true,
 	"markers": "all",
+	"touch_opacity": 0.55,
+	"touch_size": 1.0,
+	"steering": "stick",      # touch screen: "stick" or "tilt"
+	"pad_tilt": false,        # gamepads with motion sensors steer by tilting
+	"phone_link": true,       # accept phones as controllers over Wi-Fi
+	"graphics": "auto",       # auto / high / low
 }
+var remote: RemoteLink
 var career = null          # Career, when one is open
 var career_slot := 0
 var _world: Array = []
@@ -28,6 +35,8 @@ var _shot_frame := -1
 func _ready() -> void:
 	load_settings()
 	_apply_window()
+	get_tree().quit_on_go_back = false
+	start_phone_link()
 	# debug capture: OP_SCREENSHOT=<png> OP_SCREENSHOT_FRAME=<n> saves frame n and quits
 	_shot_path = OS.get_environment("OP_SCREENSHOT")
 	var f := OS.get_environment("OP_SCREENSHOT_FRAME")
@@ -122,3 +131,38 @@ func reload_world() -> void:
 func save_career() -> void:
 	if career:
 		career.save(career_slot)
+
+
+func start_phone_link() -> void:
+	## Lets phones running OpenPitchbox in controller mode join matches on this device.
+	if remote:
+		remote.queue_free()
+		remote = null
+	if not settings.get("phone_link", true) or DisplayServer.get_name() == "headless":
+		return
+	remote = RemoteLink.new()
+	add_child(remote)
+	if not remote.start_host():
+		push_warning("phone link: port %d busy" % RemoteLink.PORT)
+
+
+func low_graphics() -> bool:
+	var g: String = settings.get("graphics", "auto")
+	if g == "auto":
+		return OS.has_feature("mobile")
+	return g == "low"
+
+
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_WM_GO_BACK_REQUEST:
+			# Android back button behaves like Esc / B
+			var ev := InputEventAction.new()
+			ev.action = "ui_cancel"
+			ev.pressed = true
+			Input.parse_input_event(ev)
+			if _current is MainMenu:
+				get_tree().quit()
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			if _current is MatchView and OS.has_feature("mobile"):
+				(_current as MatchView).pause_from_app()

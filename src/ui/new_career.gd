@@ -15,7 +15,7 @@ func _ready() -> void:
 	base("New career", "you take over a struggling Division 4 club")
 	content.add_child(Screen.section("Who plays (co-op on your team)"))
 	for dev in InputRouter.connected_devices():
-		devices[dev] = dev == "kb1"
+		devices[dev] = dev == InputRouter.default_device()
 		content.add_child(Screen.cycler(InputRouter.device_label(dev), ["Off", "Playing"], 1 if devices[dev] else 0, func(i): devices[dev] = i == 1))
 	content.add_child(Screen.section("Rules"))
 	content.add_child(Screen.cycler("Difficulty", MatchSetup.DIFFS, diff_i, func(i): diff_i = i))
@@ -35,7 +35,7 @@ func _create() -> void:
 		if devices[d]:
 			devs.append(d)
 	if devs.is_empty():
-		devs = ["kb1"]
+		devs = [InputRouter.default_device()]
 	var opts := {"length": MatchSetup.LENGTHS[length_i], "difficulty": diff_i, "devices": devs,
 		"auto_upgrade": auto_up, "roleplay": roleplay}
 	var league := {}

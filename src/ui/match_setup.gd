@@ -55,7 +55,7 @@ func _ready() -> void:
 	content.add_child(Screen.section("Controllers"))
 	var devs := InputRouter.connected_devices()
 	for dev in devs:
-		assign[dev] = 1 if dev == "kb1" else 0
+		assign[dev] = 1 if dev == InputRouter.default_device() else 0
 		var sides := ["CPU", "Home"] if practice else ["CPU", "Home", "Away"]
 		content.add_child(Screen.cycler(InputRouter.device_label(dev), sides, assign[dev], func(i): assign[dev] = i))
 	content.add_child(Screen.section("Match"))
