@@ -22,6 +22,7 @@ var last_anim := -1
 var oneshot := ""
 var oneshot_t := 0.0
 var oneshot_min := 0.0
+var tilt := 0.0                 # sideways body tilt (keeper dive), reset every frame
 var catch_low := false          # set by the match view before a keeper catch
 
 # Native ground speeds of the source animations (m/s), used to match feet to motion
@@ -185,16 +186,20 @@ func pose(pos: Vector2, facing_angle: float, state: int, anim_id: int, speed: fl
 	oneshot_t += dt
 	match state:
 		C.ST_DIVE:
-			# side-on stretched dive: body laid out horizontally, arms past the head, then land
+			# side dive: the arms-up frame of the catch clip, whole body tipped onto its side
+			# around the feet and lifted, so the limbs keep a natural mocap shape
 			var side := 1.0 if anim_id > 0 else -1.0
 			var p3 := 1.0 - clampf(state_t / C.GK_DIVE_TIME, 0.0, 1.0)
-			var lay := smoothstep(0.0, 0.4, p3)
-			y_off = sin(minf(p3 * 1.4, 1.0) * PI) * 0.35 + lay * 0.25
-			anim.seek(minf(oneshot_t, 0.22), true)          # hold the take-off stretch
+			var lay := smoothstep(0.0, 0.35, p3)
+			if cur != "Idle":
+				_play("Idle", 0.08)
 			anim.speed_scale = 0.0
-			rots = [[b["pelvis"], Vector3.BACK, -lay * 1.35 * side * _dive_sign()],
-				[b["upperarm_l"], Vector3.BACK, -2.4 * lay], [b["upperarm_r"], Vector3.BACK, 2.4 * lay],
-				[b["thigh_l"], X, 0.15 * lay], [b["thigh_r"], X, 0.15 * lay]]
+			tilt = -side * _dive_sign() * lay * 1.35
+			y_off = sin(minf(p3 * 1.3, 1.0) * PI) * 0.45 + lay * 0.35
+			var reach := smoothstep(0.0, 0.25, p3)
+			rots = [[b["upperarm_l"], Vector3.BACK, -2.6 * reach], [b["upperarm_r"], Vector3.BACK, 2.6 * reach],
+				[b["lowerarm_l"], Vector3.BACK, -0.2 * reach], [b["lowerarm_r"], Vector3.BACK, 0.2 * reach],
+				[b["thigh_l"], Vector3.BACK, 0.12 * reach], [b["thigh_r"], Vector3.BACK, -0.12 * reach]]
 			want_w = 1.0
 		C.ST_AERIAL:
 			if anim_id == MatchSim.AER_BICYCLE:
@@ -214,6 +219,8 @@ func pose(pos: Vector2, facing_angle: float, state: int, anim_id: int, speed: fl
 	rotation.y = yaw
 	ov_w = move_toward(ov_w, want_w, dt * 10.0) if dt > 0.0 else want_w
 	overlay.set_rot(rots if not rots.is_empty() else overlay.rotations, ov_w)
+	model.rotation.z = tilt
+	tilt = 0.0
 	model.position.y = y_off
 	_place_number()
 	ring.rotation.y += dt * 2.0
@@ -276,7 +283,7 @@ func _enter(state: int, anim_id: int, prev: int) -> void:
 				_:
 					_shot("Kick_Volley", 0.08, 99.0, 1.3)
 		C.ST_DIVE:
-			_shot("GK_Dive", 0.06, 99.0, 1.0)
+			oneshot = "GK_Dive"
 		C.ST_HOLD:
 			_shot("GK_Scoop" if catch_low else "GK_Catch", 0.1, 99.0, 1.2)
 		C.ST_CELEBRATE:

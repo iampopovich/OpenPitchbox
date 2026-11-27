@@ -9,7 +9,7 @@ SFG Soccer (Stir Fry Games, 2009) was a small Xbox Live Indie game that many peo
 <img src="media/career.webp" width="380"> <img src="media/editor.webp" width="380">
 </p>
 
-> **Status:** playable alpha. The match engine, career and menus are complete and covered by tests; animations come from free motion capture and still have rough edges (keeper dives and headers are partly procedural). Gamepad and keyboard play has been exercised by scripted input, not by a large group of players yet. English UI only.
+> **Status:** playable alpha. The match engine, career and menus are complete and covered by tests; animations come from free motion capture and still have rough edges (the keeper dive, slide tackle and bicycle kick are procedural poses on top of motion capture). Gamepad and keyboard play has been exercised by scripted input, not by a large group of players yet. English UI only.
 
 ## What it does
 

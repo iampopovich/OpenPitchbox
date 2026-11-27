@@ -20,9 +20,8 @@ const CMU_CLIPS := {
 	"GK_Catch": ["143_20", 0.45, 1.25, false],        # hands up at 0.75
 	"GK_Scoop": ["143_22", 2.05, 2.95, false],        # low pick-up at 2.5
 	"GK_Throw": ["143_20", 2.90, 3.90, false],        # release about 3.25
-	"GK_Dive": ["105_43", 0.80, 1.20, false],         # take-off to full stretch; the roll is procedural
 	"Stumble": ["22_12", 0.0, 1.10, false],
-	"GetUp": ["140_08", 3.10, 5.60, false, 5.60],
+	"GetUp": ["140_08", 3.10, 5.60, false, 5.60, -1.4],
 	"Celebrate_Hop": ["83_61", 1.30, 3.00, false],
 	"Celebrate_JumpTurn": ["105_46", 1.20, 2.30, false],
 }
