@@ -6,6 +6,8 @@ extends Node3D
 var crowd_mat: ShaderMaterial
 var near_stand: Node3D        # stand between the side cameras and the pitch
 var excitement := 0.0
+var nets: Array = []
+var _net_t := {}
 
 const BOARD_H := 1.0
 const GLASS_H := 1.6
@@ -23,6 +25,11 @@ func build(home: TeamData, away: TeamData) -> void:
 
 
 func _process(dt: float) -> void:
+	for n in nets:
+		var id := (n as MeshInstance3D).get_instance_id()
+		if _net_t.has(id):
+			_net_t[id] += dt
+			((n as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("hit_t", _net_t[id])
 	excitement = maxf(0.0, excitement - dt * 0.35)
 	if crowd_mat:
 		crowd_mat.set_shader_parameter("excite", excitement)
@@ -238,12 +245,139 @@ func _goal(sx: float) -> void:
 	bi.position = Vector3(sx * C.HX, C.GOAL_H, 0)
 	bi.rotation.x = PI * 0.5
 	add_child(bi)
-	var net := _net_material()
-	var back_x := sx * (C.HX + C.GOAL_DEPTH)
-	_quad(Vector3(back_x, C.GOAL_H * 0.5, 0), Vector2(C.GOAL_HW * 2.0, C.GOAL_H), Vector3(0, PI * 0.5, 0), net)
-	for sz: float in [-1.0, 1.0]:
-		_quad(Vector3(sx * (C.HX + C.GOAL_DEPTH * 0.5), C.GOAL_H * 0.5, sz * C.GOAL_HW), Vector2(C.GOAL_DEPTH, C.GOAL_H), Vector3.ZERO, net)
-	_quad(Vector3(sx * (C.HX + C.GOAL_DEPTH * 0.5), C.GOAL_H, 0), Vector2(C.GOAL_DEPTH, C.GOAL_HW * 2.0), Vector3(PI * 0.5, 0, 0), net)
+	# net: short roof, then a sloping back down to a ground bar, side panels follow the profile
+	var net := MeshInstance3D.new()
+	net.mesh = _net_mesh(sx)
+	net.material_override = _net_shader_material()
+	net.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(net)
+	nets.append(net)
+	# stanchions: roof bars, sloping back bars, ground bar
+	var tube := Looks.mat(Color("d9d9d9"), 0.4)
+	for pz: float in [-C.GOAL_HW, C.GOAL_HW]:
+		_bar(Vector3(sx * C.HX, C.GOAL_H, pz), Vector3(sx * (C.HX + C.NET_TOP_DEPTH), C.GOAL_H - 0.05, pz), 0.025, tube)
+		_bar(Vector3(sx * (C.HX + C.NET_TOP_DEPTH), C.GOAL_H - 0.05, pz), Vector3(sx * (C.HX + C.GOAL_DEPTH), 0.02, pz), 0.025, tube)
+		_bar(Vector3(sx * C.HX, 0.02, pz), Vector3(sx * (C.HX + C.GOAL_DEPTH), 0.02, pz), 0.025, tube)
+	_bar(Vector3(sx * (C.HX + C.GOAL_DEPTH), 0.02, -C.GOAL_HW), Vector3(sx * (C.HX + C.GOAL_DEPTH), 0.02, C.GOAL_HW), 0.03, tube)
+
+
+func _bar(a: Vector3, b: Vector3, r: float, m: Material) -> void:
+	var cm := CylinderMesh.new()
+	cm.top_radius = r
+	cm.bottom_radius = r
+	cm.height = a.distance_to(b)
+	cm.radial_segments = 8
+	var mi := MeshInstance3D.new()
+	mi.mesh = cm
+	mi.material_override = m
+	add_child(mi)
+	var mid := (a + b) * 0.5
+	var up := (b - a).normalized()
+	var side := up.cross(Vector3.FORWARD if absf(up.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
+	var fwd := side.cross(up).normalized()
+	mi.transform = Transform3D(Basis(side, up, fwd), mid)
+
+
+func _net_profile(t: float) -> Vector2:
+	## Net profile from the crossbar (t=0) over the roof and down the back (t=1): (depth, height).
+	var roof := C.NET_TOP_DEPTH
+	var back := Vector2(C.GOAL_DEPTH - C.NET_TOP_DEPTH, C.GOAL_H).length()
+	var total := roof + back
+	var d := t * total
+	if d <= roof:
+		return Vector2(d, C.GOAL_H - sin(d / roof * PI) * 0.05)
+	var k := (d - roof) / back
+	var p := Vector2(roof, C.GOAL_H).lerp(Vector2(C.GOAL_DEPTH, 0.0), k)
+	# slight outward belly, like a hanging net
+	p.x += sin(k * PI) * 0.12
+	return p
+
+
+func _net_mesh(sx: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var nu := 24
+	var nv := 16
+	var mesh_size := 0.12   # metres per net cell
+	var total := C.NET_TOP_DEPTH + Vector2(C.GOAL_DEPTH - C.NET_TOP_DEPTH, C.GOAL_H).length()
+	# roof + back panel: u across the goal (z), v along the profile
+	for j in nv:
+		for i in nu:
+			var quad: Array = []
+			for c in [[0, 0], [1, 0], [1, 1], [0, 1]]:
+				var u := float(i + c[0]) / nu
+				var v := float(j + c[1]) / nv
+				var pr := _net_profile(v)
+				var z := lerpf(-C.GOAL_HW, C.GOAL_HW, u)
+				var sag := sin(u * PI) * 0.06 * sin(v * PI)
+				quad.append([Vector3(sx * (C.HX + pr.x + sag), pr.y - sag * 0.5, z), Vector2(z / mesh_size, v * total / mesh_size), v])
+			_quad_tris(st, quad)
+	# side panels: polygon under the profile, filled down to the ground
+	for pz: float in [-C.GOAL_HW, C.GOAL_HW]:
+		for j in nv:
+			for i in 8:
+				var quad2: Array = []
+				for c in [[0, 0], [1, 0], [1, 1], [0, 1]]:
+					var v2 := float(j + c[0]) / nv
+					var h := float(i + c[1]) / 8.0
+					var pr2 := _net_profile(v2)
+					var y := pr2.y * h
+					var x := sx * (C.HX + pr2.x)
+					quad2.append([Vector3(x, y, pz), Vector2((x * sx) / mesh_size, y / mesh_size), 0.5])
+				_quad_tris(st, quad2)
+	st.generate_normals()
+	return st.commit()
+
+
+func _quad_tris(st: SurfaceTool, q: Array) -> void:
+	for idx in [0, 1, 2, 0, 2, 3]:
+		st.set_uv(q[idx][1])
+		st.set_uv2(Vector2(q[idx][2], 0))
+		st.add_vertex(q[idx][0])
+
+
+static var _net_shader: Shader
+
+
+func _net_shader_material() -> ShaderMaterial:
+	if _net_shader == null:
+		_net_shader = Shader.new()
+		_net_shader.code = """
+shader_type spatial;
+render_mode cull_disabled, depth_draw_opaque;
+uniform vec3 hit_pos = vec3(0.0, -10.0, 0.0);
+uniform float hit_t = 10.0;
+uniform float hit_amp = 0.0;
+varying vec3 wpos;
+void vertex() {
+	vec3 w = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	float d = distance(w, hit_pos);
+	float wave = exp(-d * d * 1.6) * sin(hit_t * 22.0 - d * 6.0) * exp(-hit_t * 3.5) * hit_amp;
+	// bulge outward (away from the pitch) where the ball hit
+	VERTEX.x += sign(w.x) * (wave * 0.25 + exp(-d * d * 2.5) * exp(-hit_t * 5.0) * hit_amp * 0.35);
+	wpos = w;
+}
+void fragment() {
+	vec2 g = abs(fract(UV) - 0.5);
+	float line = step(0.40, max(g.x, g.y));
+	if (line < 0.5) { discard; }
+	ALBEDO = vec3(0.88);
+	ROUGHNESS = 0.9;
+}
+"""
+	var m := ShaderMaterial.new()
+	m.shader = _net_shader
+	return m
+
+
+func net_hit(pos: Vector3, strength: float) -> void:
+	for n in nets:
+		var mi := n as MeshInstance3D
+		var mat := mi.material_override as ShaderMaterial
+		if signf(pos.x) == signf(mi.get_aabb().get_center().x):
+			mat.set_shader_parameter("hit_pos", pos)
+			mat.set_shader_parameter("hit_amp", strength)
+			_net_t[mi.get_instance_id()] = 0.0
 
 
 func _net_material() -> StandardMaterial3D:

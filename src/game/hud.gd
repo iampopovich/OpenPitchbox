@@ -15,6 +15,7 @@ var name0: Label
 var name1: Label
 var banner: Label
 var banner_t := 0.0
+var hint_t := 0.0
 var sub_banner: Label
 var replay_lbl: Label
 var power: ProgressBar
@@ -32,53 +33,60 @@ func build(sim: MatchSim, title: String, shirt: Array) -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-	# scoreboard
+	# compact broadcast-style scoreboard, top left
 	var board := PanelContainer.new()
-	board.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	board.position = Vector2(-260, 12)
-	board.custom_minimum_size = Vector2(520, 0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.05, 0.08, 0.82)
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 3
+	sb.content_margin_bottom = 3
+	board.add_theme_stylebox_override("panel", sb)
+	board.position = Vector2(18, 14)
 	root.add_child(board)
 	var hb := HBoxContainer.new()
-	hb.alignment = BoxContainer.ALIGNMENT_CENTER
-	hb.add_theme_constant_override("separation", 12)
+	hb.add_theme_constant_override("separation", 8)
 	board.add_child(hb)
 	var t0: TeamData = sim.teams[0]
 	var t1: TeamData = sim.teams[1]
-	hb.add_child(UiTheme.chip(shirt[0], Vector2(14, 30)))
-	name0 = UiTheme.label(t0.short, 26)
+	hb.add_child(UiTheme.chip(shirt[0], Vector2(5, 22)))
+	name0 = UiTheme.label(t0.short, 20, Color.WHITE)
 	hb.add_child(name0)
-	score_lbl = UiTheme.label("0 - 0", 34, Color.WHITE)
+	score_lbl = UiTheme.label("0 - 0", 22, Color.WHITE)
+	score_lbl.custom_minimum_size = Vector2(56, 0)
+	score_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hb.add_child(score_lbl)
-	name1 = UiTheme.label(t1.short, 26)
+	name1 = UiTheme.label(t1.short, 20, Color.WHITE)
 	hb.add_child(name1)
-	hb.add_child(UiTheme.chip(shirt[1], Vector2(14, 30)))
-	clock_lbl = UiTheme.label("3:00", 26, UiTheme.ACCENT2)
-	clock_lbl.custom_minimum_size = Vector2(110, 0)
-	clock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	hb.add_child(UiTheme.chip(shirt[1], Vector2(5, 22)))
+	var sep := ColorRect.new()
+	sep.color = Color(1, 1, 1, 0.15)
+	sep.custom_minimum_size = Vector2(1, 22)
+	hb.add_child(sep)
+	clock_lbl = UiTheme.label("3:00", 20, UiTheme.ACCENT2)
+	clock_lbl.custom_minimum_size = Vector2(52, 0)
 	hb.add_child(clock_lbl)
-	var tl := UiTheme.label(title, 18, UiTheme.MUTED)
-	tl.position = Vector2(16, 16)
-	root.add_child(tl)
 	# banners
-	banner = UiTheme.label("", 96, Color.WHITE)
-	banner.add_theme_constant_override("outline_size", 18)
+	banner = UiTheme.label("", 52, Color.WHITE)
+	banner.add_theme_constant_override("outline_size", 10)
 	banner.add_theme_color_override("font_outline_color", Color("052e16"))
 	banner.set_anchors_preset(Control.PRESET_CENTER)
 	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	banner.position = Vector2(-500, -150)
-	banner.size = Vector2(1000, 120)
+	banner.position = Vector2(-500, -230)
+	banner.size = Vector2(1000, 70)
 	root.add_child(banner)
-	sub_banner = UiTheme.label("", 30, UiTheme.ACCENT2)
+	sub_banner = UiTheme.label("", 22, UiTheme.ACCENT2)
 	sub_banner.add_theme_constant_override("outline_size", 8)
 	sub_banner.add_theme_color_override("font_outline_color", Color.BLACK)
 	sub_banner.set_anchors_preset(Control.PRESET_CENTER)
 	sub_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub_banner.position = Vector2(-500, -30)
+	sub_banner.position = Vector2(-500, -165)
 	sub_banner.size = Vector2(1000, 50)
 	root.add_child(sub_banner)
-	replay_lbl = UiTheme.label("● REPLAY", 30, Color("f87171"))
+	replay_lbl = UiTheme.label("● REPLAY", 20, Color("f87171"))
 	replay_lbl.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	replay_lbl.position = Vector2(-220, 20)
+	replay_lbl.position = Vector2(-150, 16)
 	replay_lbl.visible = false
 	root.add_child(replay_lbl)
 	power = ProgressBar.new()
@@ -144,6 +152,9 @@ func update_hud(sim: MatchSim, dt: float) -> void:
 	else:
 		var s := int(ceil(sim.clock))
 		clock_lbl.text = "%d:%02d" % [s / 60, s % 60]
+	if hint.text != "":
+		hint_t += dt
+		hint.modulate.a = clampf(1.0 - (hint_t - 8.0), 0.0, 1.0)
 	if banner_t > 0.0:
 		banner_t -= dt
 		var a := clampf(banner_t * 2.0, 0.0, 1.0)
@@ -164,7 +175,7 @@ func show_power(screen_pos: Vector2, v: float) -> void:
 func show_fulltime(sim: MatchSim, extra: String = "") -> void:
 	ft_panel = PanelContainer.new()
 	ft_panel.set_anchors_preset(Control.PRESET_CENTER)
-	ft_panel.position = Vector2(-330, -250)
+	ft_panel.position = Vector2(-330, -300)
 	ft_panel.custom_minimum_size = Vector2(660, 0)
 	root.add_child(ft_panel)
 	var vb := VBoxContainer.new()
@@ -189,6 +200,8 @@ func show_fulltime(sim: MatchSim, extra: String = "") -> void:
 		["Possession", "%d%%" % roundi(sim.stats[0]["poss"] * 100.0 / total_poss), "%d%%" % roundi(sim.stats[1]["poss"] * 100.0 / total_poss)],
 		["Tackles", sim.stats[0]["tackles"], sim.stats[1]["tackles"]],
 		["Saves", sim.stats[0]["saves"], sim.stats[1]["saves"]],
+		["Fouls", sim.stats[0]["fouls"], sim.stats[1]["fouls"]],
+		["Cards (Y/R)", "%d / %d" % [sim.stats[0]["yellow"], sim.stats[0]["red"]], "%d / %d" % [sim.stats[1]["yellow"], sim.stats[1]["red"]]],
 	]
 	for r in rows:
 		var a := UiTheme.label(str(r[1]), 24)

@@ -36,9 +36,9 @@ const KIT_COLORS := [
 ]
 
 const SKIN_TONES := 6
-const HAIR_STYLES := 6
+const HAIR_STYLES := 4
 const HAIR_COLORS := 6
-const BEARDS := 4
+const BEARDS := 2
 
 const ROLE_FOCUS := {
 	"GK": ["kep", "kep", "pas"],

@@ -11,6 +11,8 @@ var settings := {
 	"replays": true,
 	"auto_switch": true,
 	"fullscreen": false,
+	"fouls": true,
+	"markers": "all",
 }
 var career = null          # Career, when one is open
 var career_slot := 0

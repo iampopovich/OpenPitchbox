@@ -52,6 +52,7 @@ func _ready() -> void:
 		"practice": cfg.get("practice", false),
 		"roleplay": cfg.get("roleplay", false),
 		"auto_switch": Game.settings.get("auto_switch", true),
+		"fouls": Game.settings.get("fouls", true),
 		"humans": humans,
 		"kickoff": cfg.get("kickoff", 0),
 	})
@@ -68,6 +69,7 @@ func _ready() -> void:
 		add_child(v)
 		var k: Array = kits[p.team]
 		v.build(k[0], k[1], p.data, k[2] if p.is_gk() else Color(0, 0, 0, 0))
+		v.team_marker = Game.settings.get("markers", "all") == "all"
 		v.visible = p.active
 		views.append(v)
 		prev_pos.append(p.pos)
@@ -181,9 +183,8 @@ func _handle_events() -> void:
 			"post":
 				sfx.play("post", 0.0)
 				arena.cheer(0.5)
-			"net":
-				if e["speed"] > 2.0:
-					sfx.play("net", -6.0)
+			"netsfx":
+				pass
 			"tackle", "trip":
 				sfx.play("tackle", -3.0, randf_range(0.9, 1.1))
 			"save":
@@ -193,10 +194,29 @@ func _handle_events() -> void:
 				sfx.play("catch", -6.0)
 			"whistle":
 				sfx.play("whistle", -4.0)
+			"foul":
+				sfx.play("whistle", -2.0)
+				var off := sim.players[e["by"]] as SimPlayer
+				var sub := ""
+				match e["card"]:
+					"yellow":
+						sub = "Yellow card — " + off.data.name
+					"second_yellow":
+						sub = "Second yellow, sent off — " + off.data.name
+					"red":
+						sub = "Red card — " + off.data.name
+				hud.flash("PENALTY!" if e["penalty"] else "FOUL", sub, 2.2)
+				if e["penalty"]:
+					arena.cheer(0.6)
 			"overtime":
 				hud.flash("GOLDEN GOAL", "Next goal wins", 2.5)
 				sfx.play("whistle", -2.0)
+			"net":
+				arena.net_hit(sim.ball.pos, clampf(e["speed"] / 20.0, 0.2, 1.0))
+				if e["speed"] > 2.0:
+					sfx.play("net", -6.0)
 			"goal":
+				arena.net_hit(sim.ball.pos, 1.0)
 				var team: int = e["team"]
 				var sc: int = e["scorer"]
 				var who := ""
@@ -254,6 +274,10 @@ func _process(dt: float) -> void:
 	arena.near_stand.visible = cam.mode != CameraRig.CAM_LOW
 	var bp := ball_view.mesh.position
 	cam.follow(Vector3(bp.x, 0, bp.z), dt)
+	var cp := OS.get_environment("OP_CAMPOS")
+	if cp != "":
+		var v := cp.split_floats(",")
+		cam.look_at_from_position(Vector3(v[0], v[1], v[2]), Vector3(v[3], v[4], v[5]), Vector3.UP)
 	hud.update_hud(sim, dt)
 	_update_power()
 
@@ -277,6 +301,7 @@ func _pose_from_sim(f: float, dt: float) -> void:
 	for i in sim.players.size():
 		var p := sim.players[i] as SimPlayer
 		var v := views[i] as PlayerView
+		v.visible = p.active
 		if not p.active:
 			continue
 		var pos: Vector2 = (prev_pos[i] as Vector2).lerp(p.pos, f)

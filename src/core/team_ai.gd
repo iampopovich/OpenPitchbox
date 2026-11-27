@@ -37,7 +37,8 @@ static func think(sim: MatchSim, p: SimPlayer, dt: float) -> void:
 		if opp_has:
 			var c := sim.players[owner] as SimPlayer
 			var d := p.pos.distance_to(c.pos)
-			if d < 1.8 and d > 0.7 and p.facing.dot((c.pos - p.pos).normalized()) > 0.6:
+			var from_behind := (c.pos - p.pos).dot(c.facing) > 0.2
+			if d < 1.8 and d > 0.7 and p.facing.dot((c.pos - p.pos).normalized()) > 0.6 and (not from_behind or sim.rng.randf() < 0.03):
 				if sim.rng.randf() < float(lvl["tackle"]) * dt:
 					sim.start_slide(p, c.pos + c.vel * 0.15 - p.pos)
 					return
@@ -191,6 +192,12 @@ static func defend_spot(sim: MatchSim, p: SimPlayer) -> Vector2:
 
 
 static func _carrier(sim: MatchSim, p: SimPlayer, dt: float, lvl: Dictionary) -> void:
+	if sim.penalty_lock:
+		# penalty: compose, then shoot
+		p.steer(Vector2.ZERO, dt)
+		if p.think_t <= 0.0:
+			sim.shoot(p, Vector2.ZERO, sim.rng.randf_range(0.75, 1.0))
+		return
 	var g := sim.goal_pos(p.team)
 	var to_goal := g - p.pos
 	var dist_goal := to_goal.length()
@@ -220,7 +227,7 @@ static func _carrier(sim: MatchSim, p: SimPlayer, dt: float, lvl: Dictionary) ->
 	var shoot_range := 12.0 + p.data.stat("sht") * 0.3
 	var angle_ok := absf(p.pos.y) < 8.0 or dist_goal < 9.0
 	if dist_goal < shoot_range and angle_ok:
-		var want := float(lvl["shoot"]) * (1.6 - dist_goal / shoot_range)
+		var want := float(lvl["shoot"]) * (1.3 - dist_goal / shoot_range)
 		if pressure < 2.0:
 			want += 0.25
 		if rng.randf() < want:

@@ -4,8 +4,8 @@ extends RefCounted
 
 const SKIN := [Color("e8c1a0"), Color("d6a681"), Color("b98763"), Color("94654a"), Color("6e4733"), Color("4b3024")]
 const HAIR_COLOR := [Color("161412"), Color("3b2a1e"), Color("6b4a2f"), Color("b89a6a"), Color("8a3b22"), Color("8c8c8c")]
-const HAIR_NAMES := ["Short", "Bald", "Afro", "Mohawk", "Long", "Spiky"]
-const BEARD_NAMES := ["None", "Stubble", "Full", "Goatee"]
+const HAIR_NAMES := ["Parted", "Bald", "Buzzed", "Long"]
+const BEARD_NAMES := ["None", "Beard"]
 const HUMAN_COLORS := [Color("38bdf8"), Color("f43f5e"), Color("a3e635"), Color("fbbf24")]
 
 static var _cache := {}

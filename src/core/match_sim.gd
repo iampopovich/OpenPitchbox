@@ -24,6 +24,12 @@ var difficulty := [1, 1]       # 0 easy .. 3 pro, per team
 var practice := false
 var roleplay := false
 var auto_switch := true
+var fouls_on := true
+var cards := {}                # player index -> yellow cards
+var sp_team := -1              # set piece: team taking it
+var sp_penalty := false
+var sp_taker := -1
+var penalty_lock := false      # during a penalty only taker and keeper move until the kick
 var humans: Array = []         # [{id, team, player, input, switch_cd}]
 var events: Array = []         # cleared every tick: [{type: String, ...}]
 var tick_n: int = 0
@@ -71,6 +77,9 @@ func setup(t0: TeamData, t1: TeamData, opts: Dictionary = {}) -> void:
 	practice = bool(opts.get("practice", false))
 	roleplay = bool(opts.get("roleplay", false))
 	auto_switch = bool(opts.get("auto_switch", true))
+	fouls_on = bool(opts.get("fouls", true)) and not practice
+	cards.clear()
+	penalty_lock = false
 	players.clear()
 	pstats.clear()
 	for t in 2:
@@ -88,7 +97,7 @@ func setup(t0: TeamData, t1: TeamData, opts: Dictionary = {}) -> void:
 			pstats.append({"goals": 0, "assists": 0, "shots": 0, "tackles": 0, "saves": 0})
 	stats = []
 	for t in 2:
-		stats.append({"shots": 0, "on_target": 0, "tackles": 0, "saves": 0, "poss": 0})
+		stats.append({"shots": 0, "on_target": 0, "tackles": 0, "saves": 0, "poss": 0, "fouls": 0, "yellow": 0, "red": 0})
 	humans.clear()
 	for h in opts.get("humans", []):
 		humans.append({"id": int(h["id"]), "team": int(h["team"]), "player": -1, "input": InputFrame.new(), "switch_cd": 0.0})
@@ -280,6 +289,15 @@ func tick(inputs: Dictionary = {}) -> void:
 		C.PH_FULLTIME:
 			for p in players:
 				(p as SimPlayer).vel *= 0.9
+		C.PH_SETPIECE:
+			phase_t -= dt
+			for p in players:
+				(p as SimPlayer).vel = Vector2.ZERO
+			_keep_ball_with_owner()
+			if phase_t <= 0.0:
+				phase = C.PH_PLAY
+				penalty_lock = sp_penalty
+				events.append({"type": "whistle"})
 	if phase != C.PH_FULLTIME:
 		_record()
 
@@ -316,10 +334,15 @@ func _play_tick(dt: float) -> void:
 	_compute_chase_order()
 	for h in humans:
 		h["switch_cd"] = maxf(0.0, h["switch_cd"] - dt)
+		if penalty_lock and h["player"] != sp_taker:
+			continue
 		_human_control(h, dt)
 	for p in players:
 		var sp := p as SimPlayer
 		if not sp.active:
+			continue
+		if penalty_lock and sp.index != sp_taker and not sp.is_gk():
+			sp.vel = Vector2.ZERO
 			continue
 		if sp.is_gk():
 			_keeper_ai(sp, dt)
@@ -530,6 +553,7 @@ func kick(p: SimPlayer, v: Vector3, kind: String) -> void:
 	ball.pos.y = maxf(ball.pos.y, C.BALL_R)
 	ball.last_touch = p.index
 	touch_id += 1
+	penalty_lock = false
 	p.touch_cd = C.TOUCH_COOLDOWN
 	p.buf_action = C.ACT_NONE
 	if p.state == C.ST_RUN or p.state == C.ST_HOLD:
@@ -905,9 +929,16 @@ func _slides() -> void:
 		var bf := ball_flat()
 		var owner_team := possession_team()
 		if ball.pos.y < 0.6 and hp.distance_to(bf) < C.SLIDE_REACH and owner_team != p.team:
+			var victim: SimPlayer = null
 			if ball.owner >= 0:
-				var c := players[ball.owner] as SimPlayer
-				c.knock_down()
+				victim = players[ball.owner] as SimPlayer
+				var behind := (victim.pos - p.pos).dot(victim.facing) > 0.2 and p.facing.dot(victim.facing) > 0.4
+				if fouls_on and behind:
+					p.slide_done = true
+					victim.knock_down()
+					_foul(p, victim, true)
+					return
+				victim.knock_down()
 				stats[p.team]["tackles"] += 1
 				pstats[p.index]["tackles"] += 1
 			p.slide_done = true
@@ -920,18 +951,146 @@ func _slides() -> void:
 			shot_live = false
 			events.append({"type": "tackle", "by": p.index, "slide": true})
 			continue
-		# bodies
+		# bodies: taking the man without the ball
 		for so in players:
 			var o := so as SimPlayer
-			if o.team == p.team or not o.active or o.state == C.ST_DOWN or o.is_gk():
+			if o.team == p.team or not o.active or o.state == C.ST_DOWN:
 				continue
 			if o.pos.distance_to(hp) < 0.75:
 				o.knock_down()
 				p.slide_done = true
 				events.append({"type": "trip", "by": p.index})
+				if fouls_on:
+					var behind := (o.pos - p.pos).dot(o.facing) > 0.2 and p.facing.dot(o.facing) > 0.4
+					_foul(p, o, behind)
+					return
 				if ball.owner == o.index:
 					ball.owner = -1
 					ball.vel = C.v3(p.facing * 4.0, 1.0)
+				break
+
+
+# ------------------------------------------------------------------ fouls and set pieces
+
+func _foul(offender: SimPlayer, victim: SimPlayer, from_behind: bool) -> void:
+	var team := victim.team
+	var spot := ball_flat() if ball.owner == victim.index else victim.pos
+	stats[offender.team]["fouls"] += 1
+	var card := ""
+	if from_behind and rng.randf() < 0.65:
+		card = "yellow"
+		# denying a clear run on goal: nobody but the keeper between victim and goal
+		var g := goal_pos(team)
+		if ball.owner == victim.index and victim.pos.distance_to(g) < 16.0:
+			var covered := false
+			for so in team_players(offender.team, true):
+				var d := so as SimPlayer
+				if d.index != offender.index and absf(d.pos.x - g.x) < absf(victim.pos.x - g.x):
+					covered = true
+			if not covered:
+				card = "red"
+	if card == "yellow":
+		cards[offender.index] = int(cards.get(offender.index, 0)) + 1
+		stats[offender.team]["yellow"] += 1
+		if cards[offender.index] >= 2:
+			card = "second_yellow"
+	var og := own_goal(offender.team)
+	var penalty := absf(spot.x - og.x) < C.BOX_DEPTH and absf(spot.y) < C.BOX_HW
+	events.append({"type": "foul", "by": offender.index, "victim": victim.index, "card": card, "penalty": penalty})
+	if card == "red" or card == "second_yellow":
+		stats[offender.team]["red"] += 1
+		_send_off(offender)
+	start_setpiece(team, spot, penalty)
+
+
+func _send_off(p: SimPlayer) -> void:
+	p.active = false
+	p.pos = Vector2(p.pos.x, C.HZ + 6.0)
+	p.vel = Vector2.ZERO
+	if ball.owner == p.index:
+		ball.owner = -1
+	for h in humans:
+		if h["player"] == p.index:
+			p.human = -1
+			h["player"] = -1
+			var q := _nearest_free_outfield(h["team"], ball_flat())
+			if q != null:
+				_give_control(h, q)
+
+
+func start_setpiece(team: int, spot: Vector2, penalty: bool) -> void:
+	phase = C.PH_SETPIECE
+	phase_t = C.SETPIECE_DELAY + (0.6 if penalty else 0.0)
+	sp_team = team
+	sp_penalty = penalty
+	pass_target = -1
+	pass_from = -1
+	shot_live = false
+	var dirx := attack_dir(team)
+	if penalty:
+		spot = Vector2(dirx * (C.HX - C.PENALTY_SPOT), 0.0)
+	spot.x = clampf(spot.x, -C.HX + 1.0, C.HX - 1.0)
+	spot.y = clampf(spot.y, -C.HZ + 1.0, C.HZ - 1.0)
+	ball.reset(spot)
+	var to_goal := (goal_pos(team) - spot).normalized()
+	var taker := _nearest_free_outfield_any(team, spot)
+	sp_taker = taker.index if taker else -1
+	var box_x := dirx * (C.HX - C.BOX_DEPTH - 1.0)
+	for so in players:
+		var p := so as SimPlayer
+		if not p.active:
+			continue
+		p.vel = Vector2.ZERO
+		p.buf_action = C.ACT_NONE
+		p.charge_t = -1.0
+		if p.state != C.ST_DOWN:
+			p.set_state(C.ST_RUN, 0.0)
+		if p == taker:
+			p.pos = spot - to_goal * C.DRIBBLE_OFFSET
+			p.facing = to_goal
+			p.steal_guard = 1.2
+			p.think_t = 0.5
+			p.set_state(C.ST_RUN, 0.0)
+			continue
+		if penalty:
+			if p.is_gk() and p.team != team:
+				p.pos = own_goal(p.team) + Vector2(attack_dir(p.team) * 0.3, 0)
+				p.facing = Vector2(attack_dir(p.team), 0)
+				continue
+			if absf(p.pos.x) > absf(box_x) and signf(p.pos.x) == signf(dirx) and absf(p.pos.y) < C.BOX_HW + 0.5:
+				p.pos.x = box_x
+		elif p.team != team and p.pos.distance_to(spot) < C.WALL_DIST:
+			var away := (p.pos - spot)
+			if away.length() < 0.1:
+				away = -to_goal
+			p.pos = spot + away.normalized() * C.WALL_DIST
+			_clamp_player(p)
+	if taker:
+		ball.owner = taker.index
+		ball.last_touch = taker.index
+		for h in humans:
+			if h["team"] == team and h["player"] != taker.index:
+				_give_control(h, taker)
+				break
+	events.append({"type": "setpiece", "team": team, "penalty": penalty})
+
+
+func _nearest_free_outfield_any(team: int, at: Vector2) -> SimPlayer:
+	var best: SimPlayer = null
+	var bd := INF
+	for sp in team_players(team, true):
+		var p := sp as SimPlayer
+		if p.state == C.ST_DOWN:
+			continue
+		var d := p.pos.distance_squared_to(at)
+		if d < bd:
+			bd = d
+			best = p
+	if best == null:
+		var all := team_players(team, true)
+		if not all.is_empty():
+			best = all[0]
+	return best
 
 
 func _aerials() -> void:
@@ -1097,7 +1256,7 @@ func _keeper_saves() -> void:
 		if p.gk_tried_shot == touch_id:
 			continue
 		p.gk_tried_shot = touch_id
-		var chance := 0.64 + k01 * 0.36 - (speed - 20.0) * 0.02 - (d / reach) * 0.2
+		var chance := 0.7 + k01 * 0.33 - (speed - 20.0) * 0.02 - (d / reach) * 0.2
 		if p.human < 0:
 			chance += float(level(t)["gk"])
 		chance = clampf(chance, 0.08, 0.96)
