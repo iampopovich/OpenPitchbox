@@ -17,6 +17,12 @@ var cur := ""
 var b := {}                    # bone name -> index
 var arm_side := {}             # bone name -> +1/-1 (which side of the body, model x)
 var ov_w := 0.0
+var last_state := -1
+var last_anim := -1
+var oneshot := ""
+var oneshot_t := 0.0
+var oneshot_min := 0.0
+var catch_low := false          # set by the match view before a keeper catch
 
 # Native ground speeds of the source animations (m/s), used to match feet to motion
 const JOG_SPEED := 3.3
@@ -134,7 +140,7 @@ func _collect(n: Node, out: Array) -> void:
 
 
 func _play(name: String, blend: float = 0.18) -> void:
-	if name == cur:
+	if name == cur or not anim.has_animation(name):
 		return
 	cur = name
 	anim.play(name, blend)
@@ -163,87 +169,118 @@ func set_controller(human_slot: int) -> void:
 
 
 ## Applies a pose. state/anim/state_t come from SimPlayer (or a replay snapshot).
-## Model faces +Z. A negative angle around X swings a leg forward / tips the body back.
+## Motion-capture one-shots are started on state changes; locomotion loops fill the rest.
 func pose(pos: Vector2, facing_angle: float, state: int, anim_id: int, speed: float, state_t: float, dt: float) -> void:
 	position = Vector3(pos.x, 0, pos.y)
 	var f := Vector2.from_angle(facing_angle)
-	rotation.y = atan2(f.x, f.y)
+	var yaw := atan2(f.x, f.y)
 	var X := Vector3.RIGHT
-	var Z := Vector3.BACK
 	var rots: Array = []
 	var want_w := 0.0
 	var y_off := 0.0
-	var spd := 1.0
+	if state != last_state or anim_id != last_anim:
+		_enter(state, anim_id, last_state)
+		last_state = state
+		last_anim = anim_id
+	oneshot_t += dt
 	match state:
-		C.ST_SLIDE:
-			_play("Slide", 0.1)
-		C.ST_RECOVER:
-			_play("Slide_Exit", 0.1)
-		C.ST_DOWN:
-			_play("Hit_Knockback", 0.08)
-			spd = 1.1
-		C.ST_CELEBRATE:
-			_play(["Dance", "Yes", "Slide"][clampi(anim_id, 0, 2)], 0.25)
-		C.ST_AERIAL:
-			var p := 1.0 - clampf(state_t / C.AERIAL_TIME, 0.0, 1.0)
-			var jump := sin(p * PI)
-			match anim_id:
-				MatchSim.AER_HEADER:
-					_play("Jump", 0.1)
-					y_off = jump * 0.45
-					rots = [[b["spine_03"], X, 0.25 * jump], [b["neck_01"], X, 0.7 * jump - 0.3 * maxf(0.0, p - 0.45)]]
-					want_w = 1.0
-				MatchSim.AER_BICYCLE:
-					_play("Jump", 0.1)
-					y_off = jump * 0.75
-					var flip := -lerpf(0.0, 2.5, minf(p * 1.7, 1.0))
-					rots = [[b["pelvis"], X, flip], [b["thigh_r"], X, -lerpf(0.3, 1.8, minf(p * 2.0, 1.0))], [b["thigh_l"], X, 0.4]]
-					want_w = 1.0
-				_:
-					y_off = jump * 0.15
-					rots = [[b["thigh_r"], X, -lerpf(-0.5, 1.7, minf(p * 2.5, 1.0))], [b["calf_r"], X, lerpf(1.2, 0.0, minf(p * 2.5, 1.0))], [b["spine_01"], X, -0.35 * jump]]
-					want_w = 1.0
 		C.ST_DIVE:
-			_play("Jump", 0.08)
+			# side-on stretched dive: body laid out horizontally, arms past the head, then land
 			var side := 1.0 if anim_id > 0 else -1.0
-			var p2 := 1.0 - clampf(state_t / C.GK_DIVE_TIME, 0.0, 1.0)
-			y_off = sin(minf(p2 * 1.6, 1.0) * PI) * 0.45
-			var roll := lerpf(0.3, 1.35, minf(p2 * 2.2, 1.0)) * side
-			# side in world z; the keeper faces along x, so the roll axis is his forward axis
-			rots = [[b["pelvis"], Z, -roll * _dive_sign()],
-				[b["upperarm_l"], Z, 2.6 * arm_side["upperarm_l"]], [b["upperarm_r"], Z, 2.6 * arm_side["upperarm_r"]]]
+			var p3 := 1.0 - clampf(state_t / C.GK_DIVE_TIME, 0.0, 1.0)
+			var lay := smoothstep(0.0, 0.4, p3)
+			y_off = sin(minf(p3 * 1.4, 1.0) * PI) * 0.35 + lay * 0.25
+			anim.seek(minf(oneshot_t, 0.22), true)          # hold the take-off stretch
+			anim.speed_scale = 0.0
+			rots = [[b["pelvis"], Vector3.BACK, -lay * 1.35 * side * _dive_sign()],
+				[b["upperarm_l"], Vector3.BACK, -2.4 * lay], [b["upperarm_r"], Vector3.BACK, 2.4 * lay],
+				[b["thigh_l"], X, 0.15 * lay], [b["thigh_r"], X, 0.15 * lay]]
 			want_w = 1.0
-		_:
-			var loco := "Idle"
-			if speed > 0.5:
-				if speed < 4.3:
-					loco = "Jog_Fwd"
-					spd = clampf(speed / JOG_SPEED, 0.5, 1.5)
-				else:
-					loco = "Sprint"
-					spd = clampf(speed / SPRINT_SPEED, 0.7, 1.4)
-			_play(loco, 0.2)
-			if state == C.ST_KICK:
-				var p3 := 1.0 - clampf(state_t / 0.22, 0.0, 1.0)
-				rots = [[b["thigh_r"], X, -lerpf(-0.7, 1.25, p3)], [b["calf_r"], X, lerpf(1.4, 0.05, minf(p3 * 1.4, 1.0))], [b["spine_01"], X, -0.12]]
+		C.ST_AERIAL:
+			if anim_id == MatchSim.AER_BICYCLE:
+				var p := 1.0 - clampf(state_t / C.AERIAL_TIME, 0.0, 1.0)
+				y_off = sin(p * PI) * 0.55
+				rots = [[b["pelvis"], X, -1.75 * sin(minf(p * 1.25, 1.0) * PI * 0.5)], [b["thigh_r"], X, -lerpf(0.3, 1.6, minf(p * 2.0, 1.0))]]
 				want_w = 1.0
-			elif state == C.ST_HOLD:
-				rots = [[b["upperarm_l"], X, -1.1], [b["upperarm_r"], X, -1.1], [b["lowerarm_l"], X, -0.6], [b["lowerarm_r"], X, -0.6]]
+			elif anim_id == MatchSim.AER_HEADER:
+				var p2 := 1.0 - clampf(state_t / C.AERIAL_TIME, 0.0, 1.0)
+				rots = [[b["neck_01"], X, 0.5 * sin(p2 * PI) - 0.35 * maxf(0.0, p2 - 0.5)]]
 				want_w = 1.0
-	anim.speed_scale = spd
-	ov_w = move_toward(ov_w, want_w, dt * 12.0) if dt > 0.0 else want_w
-	if not rots.is_empty():
-		overlay.set_rot(rots, ov_w)
-	else:
-		overlay.set_rot(overlay.rotations, ov_w)
+		C.ST_RUN, C.ST_KICK, C.ST_HOLD, C.ST_RECOVER:
+			if oneshot == "" or (oneshot_t > oneshot_min and speed > 2.5) or not anim.is_playing():
+				oneshot = ""
+				if state != C.ST_HOLD:
+					_locomotion(speed)
+	rotation.y = yaw
+	ov_w = move_toward(ov_w, want_w, dt * 10.0) if dt > 0.0 else want_w
+	overlay.set_rot(rots if not rots.is_empty() else overlay.rotations, ov_w)
 	model.position.y = y_off
 	_place_number()
 	ring.rotation.y += dt * 2.0
 	if marker.visible:
 		var t := Time.get_ticks_msec() / 1000.0
-		marker.position.y = (2.2 if marker.scale.x > 0.9 else 2.1) + y_off + (sin(t * 5.0) * 0.06 if marker.scale.x > 0.9 else 0.0)
+		marker.position.y = (2.2 if marker.scale.x > 0.9 else 2.1) + (sin(t * 5.0) * 0.06 if marker.scale.x > 0.9 else 0.0)
 		marker.rotation.y += dt * 2.5
 		tag.position.y = marker.position.y + 0.45
+
+
+func _locomotion(speed: float) -> void:
+	var loco := "Idle"
+	var spd := 1.0
+	if speed > 0.5:
+		if speed < 4.3:
+			loco = "Jog_Fwd"
+			spd = clampf(speed / JOG_SPEED, 0.6, 1.5)
+		else:
+			loco = "Sprint"
+			spd = clampf(speed / SPRINT_SPEED, 0.75, 1.4)
+	_play(loco, 0.22)
+	anim.speed_scale = spd
+
+
+func _shot(clip: String, blend: float, min_t: float, spd: float = 1.0) -> void:
+	if not anim.has_animation(clip):
+		return
+	cur = ""
+	_play(clip, blend)
+	anim.speed_scale = spd
+	oneshot = clip
+	oneshot_t = 0.0
+	oneshot_min = min_t
+
+
+func _enter(state: int, anim_id: int, prev: int) -> void:
+	match state:
+		C.ST_KICK:
+			if prev == C.ST_HOLD:
+				_shot("GK_Throw", 0.12, 0.5, 1.2)
+			elif anim_id == 1:
+				_shot("Kick_Shot" if randf() < 0.6 else "Kick_Shot2", 0.08, 0.45, 1.25)
+			else:
+				_shot("Kick_Pass", 0.08, 0.35, 1.25)
+		C.ST_SLIDE:
+			_shot("Slide", 0.08, 0.4, 1.3)
+		C.ST_RECOVER:
+			_shot("Slide_Exit", 0.1, 0.2, 1.2)
+		C.ST_DOWN:
+			_shot("Hit_Knockback", 0.08, 99.0, 1.2)
+			get_tree().create_timer(0.45).timeout.connect(func():
+				if last_state == C.ST_DOWN:
+					_shot("GetUp", 0.25, 99.0, 2.4))
+		C.ST_AERIAL:
+			match anim_id:
+				MatchSim.AER_HEADER:
+					_shot("Header_Jump", 0.08, 99.0, 1.4)
+				MatchSim.AER_BICYCLE:
+					_shot("Jump", 0.08, 99.0, 1.0)
+				_:
+					_shot("Kick_Volley", 0.08, 99.0, 1.3)
+		C.ST_DIVE:
+			_shot("GK_Dive", 0.06, 99.0, 1.0)
+		C.ST_HOLD:
+			_shot("GK_Scoop" if catch_low else "GK_Catch", 0.1, 99.0, 1.2)
+		C.ST_CELEBRATE:
+			_shot(["Celebrate_Hop", "Celebrate_JumpTurn", "Dance"][clampi(anim_id, 0, 2)], 0.2, 99.0, 1.0)
 
 
 func _dive_sign() -> float:
@@ -273,3 +310,18 @@ static func _marker_mat(c: Color) -> StandardMaterial3D:
 		m.render_priority = 10
 		_marker_cache[c] = m
 	return _marker_cache[c]
+
+
+func hands_pos() -> Vector3:
+	var hl := skel.find_bone("hand_l")
+	var hr := skel.find_bone("hand_r")
+	var a := skel.global_transform * skel.get_bone_global_pose(hl).origin
+	var c := skel.global_transform * skel.get_bone_global_pose(hr).origin
+	return (a + c) * 0.5 + global_basis.z * 0.1
+
+
+func freeze_clip(clip: String, t01: float) -> void:
+	## Debug: shows one frame of a clip (used by the clip contact sheet).
+	_shot(clip, 0.0, 99.0, 1.0)
+	anim.seek(anim.current_animation_length * t01, true)
+	anim.speed_scale = 0.0

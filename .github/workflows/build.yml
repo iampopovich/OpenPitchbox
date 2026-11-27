@@ -1,0 +1,82 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  test-and-export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot and export templates
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}
+
+      - name: Install Godot
+        run: |
+          set -e
+          if [ ! -x ~/godot/godot ]; then
+            mkdir -p ~/godot && cd ~/godot
+            base=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
+            curl -sSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+            curl -sSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+            curl -sSL -o SHA512-SUMS.txt "$base/SHA512-SUMS.txt"
+            grep "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" SHA512-SUMS.txt | awk '{print $1"  godot.zip"}' | sha512sum -c -
+            grep "Godot_v${GODOT_VERSION}-stable_export_templates.tpz" SHA512-SUMS.txt | awk '{print $1"  templates.tpz"}' | sha512sum -c -
+            unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
+            dest=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+            mkdir -p "$dest" && unzip -q templates.tpz -d tpl && mv tpl/templates/* "$dest/"
+            rm -rf godot.zip templates.tpz tpl
+          fi
+          echo "$HOME/godot" >> "$GITHUB_PATH"
+
+      - name: Import project
+        run: godot --headless --import || true
+
+      - name: Tests
+        run: godot --headless --script res://tests/run_tests.gd
+
+      - name: Export Linux and Windows
+        run: |
+          set -e
+          mkdir -p build/linux build/windows
+          godot --headless --export-release "Linux" build/linux/OpenPitchbox.x86_64
+          godot --headless --export-release "Windows Desktop" build/windows/OpenPitchbox.exe
+          cp LICENSE build/linux/ && cp LICENSE build/windows/
+          cp assets/third_party/quaternius/README.md build/linux/THIRD_PARTY.md
+          cp assets/third_party/quaternius/README.md build/windows/THIRD_PARTY.md
+          cd build
+          tar -czf OpenPitchbox-linux-x86_64.tar.gz -C linux .
+          (cd windows && zip -qr ../OpenPitchbox-windows-x86_64.zip .)
+          sha256sum OpenPitchbox-linux-x86_64.tar.gz OpenPitchbox-windows-x86_64.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpenPitchbox-builds
+          path: |
+            build/OpenPitchbox-linux-x86_64.tar.gz
+            build/OpenPitchbox-windows-x86_64.zip
+            build/SHA256SUMS.txt
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/OpenPitchbox-linux-x86_64.tar.gz build/OpenPitchbox-windows-x86_64.zip build/SHA256SUMS.txt \
+            --title "OpenPitchbox $GITHUB_REF_NAME" --notes "Builds made by CI from this tag. Verify with SHA256SUMS.txt."

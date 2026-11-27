@@ -5,6 +5,27 @@ extends RefCounted
 
 const CHAR_PATH := "res://assets/third_party/quaternius/character/Superhero_Male_FullBody.gltf"
 const ANIM_PATHS := ["res://assets/third_party/quaternius/anim/UAL1_Standard.glb", "res://assets/third_party/quaternius/anim/UAL2_Standard.glb"]
+const CMU_PATH := "res://assets/third_party/cmu/cmu_football.glb"
+
+# Motion-capture segments cut from CMU clips: name -> [source, start s, end s, loop, facing reference time]
+# (the actor's facing at the reference time becomes +Z; default = start)
+# (source times were measured with tools/blender/analyze_cmu.py; "contact" notes the ball strike)
+const CMU_CLIPS := {
+	"Kick_Shot": ["10_03", 0.92, 1.75, false],        # contact 1.17
+	"Kick_Shot2": ["11_01", 3.17, 3.95, false],       # contact 3.42
+	"Kick_Pass": ["10_02", 2.70, 3.40, false],        # contact 2.92
+	"Kick_Volley": ["10_06", 3.20, 3.95, false],      # contact 3.42
+	"Header_Jump": ["105_43", 0.62, 1.55, false],     # peak 1.0
+	"Header_RunJump": ["127_21", 0.35, 1.30, false],  # peak 0.75
+	"GK_Catch": ["143_20", 0.45, 1.25, false],        # hands up at 0.75
+	"GK_Scoop": ["143_22", 2.05, 2.95, false],        # low pick-up at 2.5
+	"GK_Throw": ["143_20", 2.90, 3.90, false],        # release about 3.25
+	"GK_Dive": ["105_43", 0.80, 1.20, false],         # take-off to full stretch; the roll is procedural
+	"Stumble": ["22_12", 0.0, 1.10, false],
+	"GetUp": ["140_08", 3.10, 5.60, false, 5.60],
+	"Celebrate_Hop": ["83_61", 1.30, 3.00, false],
+	"Celebrate_JumpTurn": ["105_46", 1.20, 2.30, false],
+}
 const HAIR_PATHS := {
 	"parted": "res://assets/third_party/quaternius/character/Hair_SimpleParted.gltf",
 	"buzzed": "res://assets/third_party/quaternius/character/Hair_Buzzed.gltf",
@@ -49,8 +70,100 @@ static func library() -> AnimationLibrary:
 				a.loop_mode = Animation.LOOP_LINEAR if loops.has(name) else Animation.LOOP_NONE
 				_library.add_animation(name, a)
 		inst.free()
+	_add_cmu_clips()
 	return _library
 
+
+static func _add_cmu_clips() -> void:
+	var ps: PackedScene = load(CMU_PATH)
+	if ps == null:
+		return
+	var inst := ps.instantiate()
+	var ap := _find(inst, "AnimationPlayer") as AnimationPlayer
+	var sk := _find(inst, "Skeleton3D") as Skeleton3D
+	if sk:
+		_cmu_root = sk.get_bone_rest(sk.find_bone("root")).basis.get_rotation_quaternion()
+	var by_src := {}
+	if ap:
+		for name in ap.get_animation_list():
+			# actions are named "cmu_<id>"; the first one may keep its file name "<id>-..."
+			var id: String = name.trim_prefix("cmu_").get_slice("-", 0)
+			by_src[id] = ap.get_animation(name)
+	for clip in CMU_CLIPS:
+		var d: Array = CMU_CLIPS[clip]
+		if by_src.has(d[0]):
+			_library.add_animation(clip, _cut(by_src[d[0]], d[1], d[2], d[3], d[4] if d.size() > 4 else d[1], d[5] if d.size() > 5 else 0.0))
+	inst.free()
+
+
+static func _yaw_of(q: Quaternion) -> float:
+	var f := Basis(q) * Vector3.BACK
+	return atan2(f.x, f.z)
+
+
+static var _ref_yaw := INF
+static var _cmu_root := Quaternion.IDENTITY   # rest rotation of the parent of "pelvis" in the CMU rig
+
+
+static func _reference_yaw() -> float:
+	## Pelvis yaw of the Quaternius idle on the same skeleton = "facing +Z" for our model.
+	if _ref_yaw == INF:
+		_ref_yaw = 0.0
+		var idle: Animation = _library.get_animation("Idle") if _library.has_animation("Idle") else null
+		if idle:
+			for t in idle.get_track_count():
+				if idle.track_get_type(t) == Animation.TYPE_ROTATION_3D and str(idle.track_get_path(t)).ends_with(":pelvis"):
+					var our_root := Quaternion.IDENTITY
+					var inst := (load(CHAR_PATH) as PackedScene).instantiate()
+					var sk := _find(inst, "Skeleton3D") as Skeleton3D
+					if sk and sk.find_bone("root") >= 0:
+						our_root = sk.get_bone_rest(sk.find_bone("root")).basis.get_rotation_quaternion()
+					inst.free()
+					_ref_yaw = _yaw_of(our_root * idle.rotation_track_interpolate(t, 0.0))
+	return _ref_yaw
+
+
+static func _cut(src: Animation, t0: float, t1: float, loop: bool, t_face: float, extra_yaw: float = 0.0) -> Animation:
+	## Copies [t0, t1] of src into a new clip starting at 0. The CMU actor's facing lives in
+	## the pelvis rotation: it is turned so that at t_face he faces like our idle pose. Ground
+	## travel is removed (the match engine moves the player); height is kept.
+	var a := Animation.new()
+	a.length = t1 - t0
+	a.loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
+	var unyaw := Quaternion.IDENTITY
+	var pelvis_origin := Vector3.ZERO
+	for t in src.get_track_count():
+		var ps := str(src.track_get_path(t))
+		if ps.ends_with(":pelvis") and src.track_get_type(t) == Animation.TYPE_ROTATION_3D:
+			var up_local := _cmu_root.inverse() * Vector3.UP
+			unyaw = Quaternion(up_local, _reference_yaw() - _yaw_of(_cmu_root * src.rotation_track_interpolate(t, t_face)) + extra_yaw)
+		if ps.ends_with(":pelvis") and src.track_get_type(t) == Animation.TYPE_POSITION_3D:
+			pelvis_origin = src.position_track_interpolate(t, t_face)
+	for t in src.get_track_count():
+		var path := src.track_get_path(t)
+		var type := src.track_get_type(t)
+		var nt := a.add_track(type)
+		a.track_set_path(nt, path)
+		a.track_set_interpolation_type(nt, src.track_get_interpolation_type(t))
+		var bone := str(path).get_slice(":", 1)
+		for k in src.track_get_key_count(t):
+			var kt := src.track_get_key_time(t, k)
+			if kt < t0 - 0.0001 or kt > t1 + 0.0001:
+				continue
+			var v = src.track_get_key_value(t, k)
+			if bone == "root" and type == Animation.TYPE_POSITION_3D:
+				v = Vector3(0.0, (v as Vector3).y, 0.0)
+			elif bone == "pelvis" and type == Animation.TYPE_POSITION_3D:
+				# split into height (along world up, expressed in the parent frame) and ground drift
+				var up_l := _cmu_root.inverse() * Vector3.UP
+				var rel: Vector3 = (v as Vector3) - pelvis_origin
+				var h := rel.dot(up_l)
+				var drift: Vector3 = unyaw * (rel - up_l * h)
+				v = pelvis_origin.project(up_l) + (pelvis_origin - pelvis_origin.project(up_l)) + up_l * h + drift * 0.3
+			elif bone == "pelvis" and type == Animation.TYPE_ROTATION_3D:
+				v = (unyaw * (v as Quaternion)).normalized()
+			a.track_insert_key(nt, kt - t0, v)
+	return a
 
 static func hair_scene(key: String) -> PackedScene:
 	if not _hair.has(key):
