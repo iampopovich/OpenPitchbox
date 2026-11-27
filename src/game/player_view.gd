@@ -194,8 +194,9 @@ func pose(pos: Vector2, facing_angle: float, state: int, anim_id: int, speed: fl
 			if cur != "Idle":
 				_play("Idle", 0.08)
 			anim.speed_scale = 0.0
-			tilt = -side * _dive_sign() * lay * 1.35
-			y_off = sin(minf(p3 * 1.3, 1.0) * PI) * 0.45 + lay * 0.35
+			var land := smoothstep(0.62, 0.95, p3)
+			tilt = -side * _dive_sign() * lay * lerpf(1.35, 1.5, land)
+			y_off = sin(minf(p3 * 1.3, 1.0) * PI) * 0.45 + lay * lerpf(0.35, 0.14, land)
 			var reach := smoothstep(0.0, 0.25, p3)
 			rots = [[b["upperarm_l"], Vector3.BACK, -2.6 * reach], [b["upperarm_r"], Vector3.BACK, 2.6 * reach],
 				[b["lowerarm_l"], Vector3.BACK, -0.2 * reach], [b["lowerarm_r"], Vector3.BACK, 0.2 * reach],
