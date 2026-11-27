@@ -51,9 +51,25 @@ static func scene() -> PackedScene:
 	return _scene
 
 
+const BAKED_PATH := "res://assets/generated/animations.res"
+const USED := ["Idle", "Jog_Fwd", "Sprint", "Jump", "Slide", "Slide_Exit", "Hit_Knockback", "Dance",
+	"Kick_Shot", "Kick_Shot2", "Kick_Pass", "Kick_Volley", "Header_Jump", "Header_RunJump",
+	"GK_Catch", "GK_Scoop", "GK_Throw", "GetUp", "Stumble", "Celebrate_Hop", "Celebrate_JumpTurn"]
+
+
 static func library() -> AnimationLibrary:
+	## The clips the game uses, baked by tools/bake_anims.gd (cutting the motion capture at
+	## start-up took ~8 s on a phone). Falls back to building them from the source files.
 	if _library:
 		return _library
+	if ResourceLoader.exists(BAKED_PATH) and OS.get_environment("OP_REBAKE") == "":
+		_library = load(BAKED_PATH)
+		if _library:
+			return _library
+	return build_library()
+
+
+static func build_library() -> AnimationLibrary:
 	_library = AnimationLibrary.new()
 	for path in ANIM_PATHS:
 		var ps: PackedScene = load(path)

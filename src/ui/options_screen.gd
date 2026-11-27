@@ -13,8 +13,11 @@ func _ready() -> void:
 	content.add_child(Screen.cycler("Auto switch on defence", ["On", "Off"], 0 if st.get("auto_switch", true) else 1, func(i): _setv("auto_switch", i == 0)))
 	content.add_child(Screen.cycler("Player markers", ["All players", "Controlled only"], 0 if st.get("markers", "all") == "all" else 1, func(i): _setv("markers", "all" if i == 0 else "human")))
 	content.add_child(Screen.cycler("Fouls and cards", ["On", "Off (classic arcade)"], 0 if st.get("fouls", true) else 1, func(i): _setv("fouls", i == 0)))
-	content.add_child(Screen.cycler("Display", ["Window", "Fullscreen"], 1 if st.get("fullscreen", false) else 0, func(i): Game.set_fullscreen(i == 1)))
-	content.add_child(Screen.cycler("Graphics", ["Auto", "High", "Low (phones)"], ["auto", "high", "low"].find(st.get("graphics", "auto")), func(i): _setv("graphics", ["auto", "high", "low"][i])))
+	if not OS.has_feature("mobile"):
+		content.add_child(Screen.cycler("Display", ["Window", "Fullscreen"], 1 if st.get("fullscreen", false) else 0, func(i): Game.set_fullscreen(i == 1)))
+	content.add_child(Screen.cycler("Graphics", ["Auto", "High", "Low (phones)"], ["auto", "high", "low"].find(st.get("graphics", "auto")), func(i):
+		_setv("graphics", ["auto", "high", "low"][i])
+		Game.apply_graphics()))
 	content.add_child(Screen.section("Touch and motion"))
 	var ops := ["30%", "45%", "55%", "70%", "85%"]
 	var opv := [0.3, 0.45, 0.55, 0.7, 0.85]

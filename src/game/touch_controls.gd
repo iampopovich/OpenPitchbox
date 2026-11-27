@@ -88,6 +88,11 @@ func _input(event: InputEvent) -> void:
 		var t := event as InputEventScreenTouch
 		if t.pressed:
 			var a := _hit(t.position)
+			if Game.dbg("log_events"):
+				var cs := []
+				for i in ACTIONS.size():
+					cs.append([ACTIONS[i][0], _button_center(i).round()])
+				print("OPBX touch %s -> '%s' size %s r %.0f buttons %s" % [t.position.round(), a, size, _r(), cs])
 			if a != "":
 				fingers[t.index] = a
 				if a == "pause":

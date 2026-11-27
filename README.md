@@ -14,7 +14,7 @@ That is not easy any more. The Xbox Live Indie Games marketplace closed, and the
 OpenPitchbox is the answer to that. The game is rebuilt from scratch from the design described in reviews and gameplay videos. It contains no code, art, sound or text from the original. Everything is open: you can read the source, build it yourself, or take a build that GitHub Actions made from a tagged commit. Each build comes with published checksums. The project is not affiliated with Stir Fry Games.
 
 > [!NOTE]
-> **Status: playable alpha.** The match engine, the career and the menus are complete and covered by headless tests. Keyboard, gamepad and mouse play on Linux has been tested. Touch controls, tilt steering and phones as Wi-Fi controllers work on desktop, but have not yet been tried on a real phone. There is no Android build yet. Animations come from free motion capture; the keeper dive, slide tackle and bicycle kick are procedural poses on top of it. The game is in English only.
+> **Status: playable alpha.** The match engine, the career and the menus are complete and covered by headless tests. Keyboard, gamepad and mouse play on Linux has been tested. The Android build has been tested on a Redmi Note 9 (Mali-G52): touch controls and the phone-as-controller mode work, and the match runs at about 35 fps with the phone graphics profile. The first match on a new phone takes about 30 seconds to start while the graphics are prepared; later matches start in a few seconds. Tilt steering has not been tried on a real phone yet. Animations come from free motion capture; the keeper dive, slide tackle and bicycle kick are procedural poses on top of it. The game is in English only.
 
 <p align="center">
 <img src="media/career.webp" width="400" alt="Career hub"> <img src="media/upgrades.webp" width="400" alt="Player upgrades after a match"><br>
@@ -65,8 +65,9 @@ GitHub Actions builds every tagged version from that tag and attaches the files 
 |---|---|
 | `OpenPitchbox-linux-x86_64.tar.gz` | 64-bit Linux: unpack and run `OpenPitchbox.x86_64` |
 | `OpenPitchbox-windows-x86_64.zip` | Windows 10/11: unpack and run `OpenPitchbox.exe` (the build is not code-signed) |
+| `OpenPitchbox-android-arm64.apk` | Android 7+ phones and tablets (64-bit ARM): install the APK, allowing installs from your browser or file manager. Every release is signed with the same key, so a new APK installs over the old one and keeps your careers |
 
-You need a GPU with Vulkan; any integrated GPU from the last eight years or so will do. You can also run the game from source with [Godot 4.7](https://godotengine.org/download): `godot --path .`
+You need a GPU with Vulkan; any integrated GPU from the last eight years or so will do. The game is the same on every platform: the same match, career, editor and saves. Only the default graphics profile differs: phones start on "Low" (no real-time shadows, fewer spectators, lower 3D resolution), and you can switch it under Options → Graphics. You can also run the game from source with [Godot 4.7](https://godotengine.org/download): `godot --path .`
 
 ---
 

@@ -75,6 +75,9 @@ func build(kit1: Color, kit2: Color, pd: PlayerData, gk_kit: Color = Color(0, 0,
 	number_label.outline_size = 6
 	number_label.outline_modulate = shirt.darkened(0.6)
 	add_child(number_label)
+	var game := get_node_or_null("/root/Game") if is_inside_tree() else null
+	if game and game.low_graphics():
+		add_child(_blob_shadow())
 	ring = MeshInstance3D.new()
 	var tm := TorusMesh.new()
 	tm.inner_radius = 0.42
@@ -340,3 +343,33 @@ func freeze_clip(clip: String, t01: float) -> void:
 	_shot(clip, 0.0, 99.0, 1.0)
 	anim.seek(anim.current_animation_length * t01, true)
 	anim.speed_scale = 0.0
+
+
+static var _blob_mat: StandardMaterial3D
+
+
+static func _blob_shadow() -> MeshInstance3D:
+	## Soft dark disc under the player when real shadows are off (phone graphics).
+	if _blob_mat == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0, 0, 0, 0.55))
+		g.set_color(1, Color(0, 0, 0, 0.0))
+		var tex := GradientTexture2D.new()
+		tex.gradient = g
+		tex.fill = GradientTexture2D.FILL_RADIAL
+		tex.fill_from = Vector2(0.5, 0.5)
+		tex.fill_to = Vector2(1.0, 0.5)
+		tex.width = 64
+		tex.height = 64
+		_blob_mat = StandardMaterial3D.new()
+		_blob_mat.albedo_texture = tex
+		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var m := MeshInstance3D.new()
+	var q := PlaneMesh.new()
+	q.size = Vector2(1.1, 1.1)
+	m.mesh = q
+	m.material_override = _blob_mat
+	m.position.y = 0.012
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return m

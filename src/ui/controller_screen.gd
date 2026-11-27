@@ -9,20 +9,26 @@ var pad: TouchControls
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = UiTheme.get_theme()
 	var bg := ColorRect.new()
-	bg.color = Color("0b1220")
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = UiTheme.BG
 	add_child(bg)
-	status = UiTheme.label("Looking for a game on this Wi-Fi…", 22, UiTheme.MUTED)
-	status.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	status = UiTheme.label("Looking for OpenPitchbox on this Wi-Fi…", 22, UiTheme.MUTED)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status.position = Vector2(-400, 90)
-	status.size = Vector2(800, 40)
 	add_child(status)
-	var exit := UiTheme.button("Exit", func(): Game.show_menu(), 160)
-	exit.position = Vector2(20, 16)
+	status.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	status.offset_top = 92
+	status.offset_bottom = 132
+	var hint := UiTheme.label("Start a match on the computer and pick “Phone 1” as the controller.", 17, UiTheme.MUTED)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(hint)
+	hint.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	hint.offset_top = 132
+	hint.offset_bottom = 162
+	var exit := UiTheme.button("Exit", func(): Game.show_menu(), 140)
+	exit.position = Vector2(24, 20)
 	add_child(exit)
 	if Game.remote:
 		Game.remote.stop()          # this phone is a controller now, not a host

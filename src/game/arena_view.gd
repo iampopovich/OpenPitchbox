@@ -14,12 +14,21 @@ const GLASS_H := 1.6
 const LINE_PX_PER_M := 20.0
 
 
+var _low := false     # phone graphics profile
+
+
 func build(home: TeamData, away: TeamData) -> void:
+	var game := get_node_or_null("/root/Game") if is_inside_tree() else null
+	_low = game != null and game.low_graphics()
 	_pitch()
 	_boards()
 	_goal(1.0)
 	_goal(-1.0)
-	_stands(home, away)
+	if not (game and game.dbg("no_crowd")):
+		_stands(home, away)
+	else:
+		near_stand = Node3D.new()
+		add_child(near_stand)
 	_roof()
 	_lights()
 
@@ -418,8 +427,9 @@ func _fan_mesh() -> ArrayMesh:
 	var torso := CapsuleMesh.new()
 	torso.radius = 0.17
 	torso.height = 0.62
-	torso.radial_segments = 8
-	torso.rings = 2
+	# kept very low-poly: there are ~2000 of them (8 / 2 cost 456k triangles on a phone)
+	torso.radial_segments = 6 if not _low else 5
+	torso.rings = 1 if not _low else 0
 	st.append_from(torso, 0, Transform3D(Basis().scaled(Vector3(1, 1, 0.75)), Vector3(0, 0, 0)))
 	var tmesh := st.commit()
 	var st2 := SurfaceTool.new()
@@ -427,8 +437,8 @@ func _fan_mesh() -> ArrayMesh:
 	var headm := SphereMesh.new()
 	headm.radius = 0.11
 	headm.height = 0.24
-	headm.radial_segments = 8
-	headm.rings = 4
+	headm.radial_segments = 6 if not _low else 5
+	headm.rings = 3 if not _low else 2
 	st2.append_from(headm, 0, Transform3D(Basis(), Vector3(0, 0.42, 0)))
 	st2.commit(tmesh)
 	return tmesh
@@ -528,6 +538,15 @@ func _crowd_mesh(fan: Mesh, positions: Array, colors: Array, rng: RandomNumberGe
 	mm.use_colors = true
 	mm.use_custom_data = true
 	mm.mesh = fan
+	if _low:
+		# phones: every other spectator
+		var keep_p: Array = []
+		var keep_c: Array = []
+		for i in range(0, positions.size(), 2):
+			keep_p.append(positions[i])
+			keep_c.append(colors[i])
+		positions = keep_p
+		colors = keep_c
 	mm.instance_count = positions.size()
 	for i in positions.size():
 		var p: Vector3 = positions[i]
@@ -586,12 +605,11 @@ func _lights() -> void:
 	env.glow_intensity = 0.35
 	env.glow_bloom = 0.02
 	env.glow_hdr_threshold = 1.2
-	if Game.low_graphics():
+	if _low:
 		# phones: no SSAO, one shadow split at short range, lighter glow
 		env.ssao_enabled = false
-		env.glow_bloom = 0.0
-		key.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-		key.directional_shadow_max_distance = 45.0
+		env.glow_enabled = false
+		key.shadow_enabled = false
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.06
 	env.adjustment_saturation = 0.92

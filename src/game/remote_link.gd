@@ -61,7 +61,7 @@ func _host_poll() -> void:
 			continue
 		if pkt.size() == 5 and pkt[4] == 63:          # "OPBX?" discovery
 			udp.set_dest_address(ip, port)
-			udp.put_packet((MAGIC + "!" + OS.get_name() + " · " + ProjectSettings.get_setting("application/config/name")).to_ascii_buffer())
+			udp.put_packet((MAGIC + "!" + OS.get_name() + " - " + ProjectSettings.get_setting("application/config/name")).to_ascii_buffer())
 			continue
 		if pkt.size() < 11:
 			continue
@@ -73,6 +73,7 @@ func _host_poll() -> void:
 			for i in 4:
 				if not used.has("remote%d" % i):
 					clients[cid] = "remote%d" % i
+					print("phone controller joined as Phone %d" % (i + 1))
 					break
 		var dev: String = clients[cid]
 		var mv := Vector2(pkt.decode_s8(8), pkt.decode_s8(9)) / 127.0

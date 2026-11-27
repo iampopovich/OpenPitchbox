@@ -129,7 +129,7 @@ static func cycler(label: String, values: Array, index: int, on_change: Callable
 	## A settings row: name on the left, ◂ value ▸ on the right, full column width.
 	## Enter/A = next, Left/Right = previous/next.
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(min_w, 48)
+	b.custom_minimum_size = Vector2(min_w, UiTheme.button_h())
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL if min_w <= 0.0 else Control.SIZE_SHRINK_CENTER
 	b.set_meta("i", clampi(index, 0, values.size() - 1))
 	var row := HBoxContainer.new()
