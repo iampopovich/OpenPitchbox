@@ -51,6 +51,7 @@ func _ready() -> void:
 		"needs_winner": cfg.get("needs_winner", false),
 		"practice": cfg.get("practice", false),
 		"roleplay": cfg.get("roleplay", false),
+		"auto_switch": Game.settings.get("auto_switch", true),
 		"humans": humans,
 		"kickoff": cfg.get("kickoff", 0),
 	})
@@ -221,6 +222,8 @@ func _show_fulltime() -> void:
 	hud.banner.text = ""
 	hud.sub_banner.text = ""
 	hud.show_fulltime(sim, cfg.get("fulltime_note", ""))
+	if OS.get_environment("OP_AUTOCONTINUE") != "":
+		_continue()
 	if OS.get_environment("OP_SHOT_ON") == "fulltime":
 		Game.capture_in(60)
 

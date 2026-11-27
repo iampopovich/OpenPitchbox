@@ -31,12 +31,19 @@ var news: Array = []            # end-of-season lines
 
 # ------------------------------------------------------------------ creation
 
-static func create(p_seed: int, options: Dictionary = {}) -> Career:
+static func create(p_seed: int, options: Dictionary = {}, league: Dictionary = {}) -> Career:
 	var c := Career.new()
 	c.seed = p_seed
 	c.rng.seed = p_seed
 	for k in options:
 		c.opts[k] = options[k]
+	if league.has("teams"):
+		# a custom league from CSV: use it as is, the user picks up a random Division 4 club
+		c.teams = league["teams"]
+		c.divisions = league["divisions"]
+		c.user_team = c.divisions[DIVS - 1][c.rng.randi() % PER_DIV]
+		c.start_season()
+		return c
 	var names := TeamFactory.club_names(c.rng, DIVS * PER_DIV)
 	var id := 0
 	for d in DIVS:
@@ -503,7 +510,7 @@ static func auto_stat(pd: PlayerData, role: String) -> String:
 	var bv := 999.0
 	for i in prio.size():
 		var k: String = prio[i]
-		var v := pd.stat(k) + i * 0.6
+		var v := pd.stat(k) + i * 2.0
 		if pd.stat(k) < C.STAT_MAX and v < bv:
 			bv = v
 			best = k
