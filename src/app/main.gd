@@ -131,7 +131,9 @@ func _process(_dt: float) -> void:
 				var d: Array = v.get_meta("dbg")
 				var pv := v as PlayerView
 				var keep := pv.position
-				pv.pose(Vector2(keep.x, keep.z), PI * 0.5 - deg_to_rad(60), d[0], d[1], 0.0, d[2], 0.016)
+				pv.pose(Vector2(keep.x, keep.z), PI * 0.5 - (0.0 if d[0] == C.ST_DIVE else deg_to_rad(60)), d[0], d[1], 0.0, d[2], 0.016)
+				if d[0] == C.ST_DIVE:
+					continue
 				var len := pv.anim.current_animation_length
 				pv.anim.seek(len * clampf(1.0 - d[2] / maxf(_dur(d[0]), 0.01), 0.0, 1.0), true)
 				pv.anim.speed_scale = 0.0
