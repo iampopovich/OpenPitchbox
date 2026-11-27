@@ -7,16 +7,16 @@ extends RefCounted
 const TICK := 1.0 / 60.0
 
 # Arena (inner faces of the boards)
-const HX := 20.0
-const HZ := 12.0
-const CORNER_R := 3.0
+const HX := 24.0             # 48 x 29 m: room for six a side to spread and pass
+const HZ := 14.5
+const CORNER_R := 3.5
 const GOAL_HW := 2.6
 const GOAL_H := 2.3
 const GOAL_DEPTH := 1.6
 const NET_TOP_DEPTH := 0.6     # roof of the net before it slopes down to the ground
 const POST_R := 0.08
-const BOX_DEPTH := 6.0      # penalty box depth from the goal line
-const BOX_HW := 6.5         # penalty box half width
+const BOX_DEPTH := 7.0      # penalty box depth from the goal line
+const BOX_HW := 7.5         # penalty box half width
 
 # Ball
 const BALL_R := 0.15
@@ -31,9 +31,10 @@ const BALL_MAX_SPEED := 34.0
 # Players
 const PLAYER_R := 0.42
 const PLAYER_ACCEL := 30.0
-const BASE_SPEED := 5.4
-const SPEED_PER_STAT := 0.11      # stat 20 -> +2.2 m/s
-const CARRY_SPEED_MUL := 0.9
+const BASE_SPEED := 4.6
+const SPEED_PER_STAT := 0.19      # speed 5 -> 5.6 m/s, 10 -> 6.5, 15 -> 7.5, 20 -> 8.4
+const ACCEL_PER_STAT := 0.6
+const CARRY_SPEED_MUL := 0.84     # running with the ball is clearly slower than the pass
 const CONTROL_DIST := 0.72
 const CONTROL_MAX_Y := 0.9
 const DRIBBLE_OFFSET := 0.58
@@ -56,9 +57,12 @@ const AERIAL_TIME := 0.6
 const SHOT_MIN := 19.0
 const SHOT_MAX := 30.0
 const SHOT_CHARGE_TIME := 0.5
-const PASS_MIN := 9.0
-const PASS_MAX := 22.0
+const PASS_MIN := 11.0
+const PASS_MAX := 24.0
 const LOB_SPEED_H := 13.0
+const LOB_ARRIVE_Y := 0.9      # a lob drops to chest height at the receiver
+const CHEST_MAX_Y := 1.55      # the intended receiver can control a dropping ball up to here
+const KICK_WINDUP := 0.1       # backswing before the foot meets the ball
 
 # Keeper
 const GK_LINE_OFFSET := 0.7

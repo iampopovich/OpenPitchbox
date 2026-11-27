@@ -8,6 +8,7 @@ var owner: int = -1          # index of the player in possession, -1 = loose
 var last_touch: int = -1
 var in_goal: int = 0         # 0 = no, +1 = ball inside the +x goal, -1 = inside the -x goal
 var spin: float = 0.0        # visual only
+var in_box := false          # entered a goal through the mouth (only then can it be a goal)
 
 
 func reset(at: Vector2) -> void:
@@ -15,6 +16,7 @@ func reset(at: Vector2) -> void:
 	vel = Vector3.ZERO
 	owner = -1
 	in_goal = 0
+	in_box = false
 
 
 func on_ground() -> bool:
@@ -26,6 +28,11 @@ func ground_speed() -> float:
 
 
 ## Advances the ball by dt. Returns a list of collision event names.
+## Fast balls are integrated in sub-steps of at most MAX_STEP metres so they can never
+## tunnel through a post or the end board next to the goal.
+const MAX_STEP := 0.1
+
+
 func step(dt: float) -> Array:
 	var ev: Array = []
 	if owner >= 0:
@@ -33,6 +40,17 @@ func step(dt: float) -> Array:
 	var sp := vel.length()
 	if sp > C.BALL_MAX_SPEED:
 		vel = vel / sp * C.BALL_MAX_SPEED
+		sp = C.BALL_MAX_SPEED
+	var n := maxi(1, ceili(sp * dt / MAX_STEP))
+	var h := dt / n
+	for i in n:
+		_sub_step(h, ev)
+		if in_goal != 0:
+			break
+	return ev
+
+
+func _sub_step(dt: float, ev: Array) -> void:
 	vel.y -= C.GRAVITY * dt
 	vel *= 1.0 - C.BALL_AIR_DRAG * dt
 	pos += vel * dt
@@ -43,20 +61,20 @@ func step(dt: float) -> Array:
 			vel.y = -vel.y * C.BALL_FLOOR_REST
 			vel.x *= 0.92
 			vel.z *= 0.92
-			ev.append("bounce")
+			if not ev.has("bounce"):
+				ev.append("bounce")
 		else:
 			vel.y = 0.0
 	if pos.y <= C.BALL_R + 0.001 and vel.y == 0.0:
-		var h := Vector2(vel.x, vel.z)
-		var s := h.length()
+		var hv := Vector2(vel.x, vel.z)
+		var s := hv.length()
 		if s > 0.0:
 			var ns := maxf(0.0, s - C.BALL_ROLL_DECEL * dt)
-			h = h / s * ns
-			vel.x = h.x
-			vel.z = h.y
+			hv = hv / s * ns
+			vel.x = hv.x
+			vel.z = hv.y
 	spin += ground_speed() * dt / C.BALL_R
 	_collide_arena(ev)
-	return ev
 
 
 func _reflect(n: Vector3, rest: float) -> void:
@@ -72,8 +90,12 @@ func _collide_arena(ev: Array) -> void:
 	var ax := absf(pos.x)
 	var sx := signf(pos.x) if pos.x != 0.0 else 1.0
 	# --- goal frame and nets ---
-	var mouth := absf(pos.z) < C.GOAL_HW and pos.y < C.GOAL_H
-	if ax > C.HX - r and (mouth or ax > C.HX):
+	var mouth := absf(pos.z) < C.GOAL_HW - r * 0.5 and pos.y < C.GOAL_H - r * 0.5
+	if ax < C.HX - r:
+		in_box = false
+	elif mouth:
+		in_box = true
+	if ax > C.HX - r and in_box:
 		# inside or entering the goal box
 		if ax > C.HX + C.GOAL_DEPTH - r:
 			pos.x = sx * (C.HX + C.GOAL_DEPTH - r)
@@ -105,6 +127,7 @@ func _collide_arena(ev: Array) -> void:
 		if absf(pos.x) > C.HX + r:
 			in_goal = int(sx)
 	elif ax > C.HX - r:
+		# end board around the goal (also catches a ball that never entered the mouth)
 		pos.x = sx * (C.HX - r)
 		_reflect(Vector3(-sx, 0, 0), C.BALL_WALL_REST)
 		ev.append("wall")

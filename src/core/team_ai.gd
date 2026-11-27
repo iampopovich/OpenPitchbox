@@ -4,7 +4,7 @@ extends RefCounted
 ## Team shape: a block that slides with the ball, roles keep their lanes and depth,
 ## one player presses, one covers, the rest hold zones and mark runners inside them.
 
-const SPACING := 6.5         # wanted distance between team-mates in the shape
+const SPACING := 8.0         # wanted distance between team-mates in the shape
 
 
 static func think(sim: MatchSim, p: SimPlayer, dt: float) -> void:
@@ -21,8 +21,9 @@ static func think(sim: MatchSim, p: SimPlayer, dt: float) -> void:
 	var bf := sim.ball_flat()
 	var target: Vector2
 	var mul := 0.8
-	var rank := sim.chase_rank(p)
 	var spread := true
+	var is_presser: bool = sim.presser[p.team] == p.index
+	var is_cover: bool = sim.cover[p.team] == p.index
 	if team_has:
 		target = attack_spot(sim, p)
 	elif sim.pass_target == p.index and owner < 0:
@@ -30,7 +31,10 @@ static func think(sim: MatchSim, p: SimPlayer, dt: float) -> void:
 		mul = 1.0
 		spread = false
 		_maybe_first_time(sim, p, lvl)
-	elif rank == 0:
+	elif owner < 0 and sim.pass_target >= 0 and (sim.players[sim.pass_target] as SimPlayer).team == p.team:
+		# a team-mate is about to receive: keep the shape instead of running at the ball
+		target = attack_spot(sim, p)
+	elif is_presser:
 		target = sim.intercept_point(p)
 		mul = float(lvl["pace"])
 		spread = false
@@ -42,12 +46,12 @@ static func think(sim: MatchSim, p: SimPlayer, dt: float) -> void:
 				if sim.rng.randf() < float(lvl["tackle"]) * dt:
 					sim.start_slide(p, c.pos + c.vel * 0.15 - p.pos)
 					return
-	elif rank == 1 and opp_has and p.role != "FWD" and p.pos.distance_to(bf) < 14.0:
-		# cover: goal-side of the ball, a few metres behind the presser
+	elif is_cover and p.pos.distance_to(bf) < 18.0:
+		# cover: goal-side of the ball, 5 m behind the presser, on the inside lane
 		var g := sim.own_goal(p.team)
-		target = bf + (g - bf).normalized() * minf(6.5, bf.distance_to(g) * 0.5)
-		mul = 0.9
-		spread = false
+		target = bf + (g - bf).normalized() * minf(5.0, bf.distance_to(g) * 0.45)
+		target.y = lerpf(target.y, 0.0, 0.25)
+		mul = 0.85
 	else:
 		target = defend_spot(sim, p)
 	if spread:
@@ -171,14 +175,15 @@ static func defend_spot(sim: MatchSim, p: SimPlayer) -> Vector2:
 	if role != "FWD":
 		# stay goal-side of the ball
 		x_rel = maxf(minf(x_rel, ball_d - 0.1), lim.x)
-	var z := lerpf(float(s[2]) * C.HZ * 0.62, bf.y, 0.2)
+	# the block shifts towards the ball side but keeps its width
+	var z := float(s[2]) * C.HZ * 0.55 + bf.y * 0.3
 	var spot := Vector2(dirx * x_rel * C.HX, z)
 	# mark a runner inside this zone (not the carrier: the presser has him)
 	var best: SimPlayer = null
-	var bd := 4.5
+	var bd := 5.0
 	for so in sim.team_players(1 - p.team, true):
 		var o := so as SimPlayer
-		if o.index == sim.ball.owner or o.pos.distance_to(bf) < 4.0:
+		if o.index == sim.ball.owner or o.pos.distance_to(bf) < 5.0:
 			continue
 		var d := o.pos.distance_to(spot)
 		if d < bd:
@@ -224,7 +229,7 @@ static func _carrier(sim: MatchSim, p: SimPlayer, dt: float, lvl: Dictionary) ->
 	p.think_t = float(lvl["react"]) * sim.rng.randf_range(0.7, 1.3)
 	var rng := sim.rng
 	# shoot
-	var shoot_range := 12.0 + p.data.stat("sht") * 0.3
+	var shoot_range := 9.5 + p.data.stat("sht") * 0.3
 	var angle_ok := absf(p.pos.y) < 8.0 or dist_goal < 9.0
 	if dist_goal < shoot_range and angle_ok:
 		var want := float(lvl["shoot"]) * (1.3 - dist_goal / shoot_range)
@@ -243,13 +248,13 @@ static func _carrier(sim: MatchSim, p: SimPlayer, dt: float, lvl: Dictionary) ->
 		if wide and absf(q.pos.y) < C.GOAL_HW * 2.0 and (q.pos.x * dirx) > C.HX * 0.5 and rng.randf() < 0.3:
 			sim.lob_to(p, q.pos + q.vel * 0.7, t)
 			return
-		if pressure < 2.2 and rng.randf() < 0.65:
+		if pressure < 3.0 and rng.randf() < 0.8:
 			if open < 0.8 and not q.is_gk() and rng.randf() < 0.4:
 				sim.lob_to(p, q.pos, t)
 			else:
 				sim.pass_to(p, q)
 			return
-		if gain > 3.0 and open > 1.8 and rng.randf() < 0.4:
+		if gain > 2.0 and open > 1.6 and rng.randf() < 0.55:
 			sim.pass_to(p, q)
 			return
 	# deep in own half under pressure: clear it

@@ -180,6 +180,11 @@ func pose(pos: Vector2, facing_angle: float, state: int, anim_id: int, speed: fl
 	var want_w := 0.0
 	var y_off := 0.0
 	if state != last_state or anim_id != last_anim:
+		if state == C.ST_RUN and last_state in [C.ST_DIVE, C.ST_HOLD, C.ST_AERIAL, C.ST_CELEBRATE, C.ST_DOWN]:
+			# leaving a held pose: never stay frozen on it (e.g. a keeper mid-dive when a goal goes in)
+			oneshot = ""
+			cur = ""
+			anim.speed_scale = 1.0
 		_enter(state, anim_id, last_state)
 		last_state = state
 		last_anim = anim_id
@@ -285,6 +290,8 @@ func _enter(state: int, anim_id: int, prev: int) -> void:
 					_shot("Kick_Volley", 0.08, 99.0, 1.3)
 		C.ST_DIVE:
 			oneshot = "GK_Dive"
+			oneshot_t = 0.0
+			oneshot_min = 99.0
 		C.ST_HOLD:
 			_shot("GK_Scoop" if catch_low else "GK_Catch", 0.1, 99.0, 1.2)
 		C.ST_CELEBRATE:

@@ -33,13 +33,25 @@ var think_t: float = 0.0
 var ai_target := Vector2.ZERO
 var ai_intent: int = 0
 
+# Kick wind-up: the ball leaves the foot when kick_t runs out
+var kick_t: float = 0.0
+var pending_v := Vector3.ZERO
+var pending_kind := ""
+
 # Keeper
 var gk_hold_t: float = 0.0
 var gk_tried_shot: int = -1
+var gk_read_touch: int = -1      # touch the read error below belongs to
+var gk_read_err: float = 0.0     # how far off the keeper reads the shot (metres along the line)
 
 
 func max_speed() -> float:
 	return C.BASE_SPEED + float(data.stat("spd")) * C.SPEED_PER_STAT
+
+
+func accel() -> float:
+	## Quick players also get going quicker: 24 m/s² (speed 1) .. 36 m/s² (speed 20).
+	return C.PLAYER_ACCEL + (float(data.stat("spd")) - 10.0) * C.ACCEL_PER_STAT
 
 
 func is_gk() -> bool:
@@ -55,6 +67,8 @@ func can_touch() -> bool:
 
 
 func set_state(s: int, t: float, sub: int = 0) -> void:
+	if s != C.ST_KICK:
+		kick_t = 0.0
 	state = s
 	state_t = t
 	anim = sub
@@ -79,7 +93,7 @@ func steer(desired: Vector2, dt: float, speed_mul: float = 1.0) -> void:
 	if desired.length() > maxv:
 		desired = desired.normalized() * maxv
 	var dv := desired - vel
-	var step := C.PLAYER_ACCEL * dt
+	var step := accel() * dt
 	if dv.length() > step:
 		dv = dv.normalized() * step
 	vel += dv
