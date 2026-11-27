@@ -34,6 +34,38 @@ func _initialize() -> void:
 	print("kicks: ", kinds)
 	print("goals after: ", goals_by, " total ", total_goals)
 	print("saves ", saves, " missed saves ", miss)
+	# team shape: nearest team-mate distance and crowding around the ball
+	var nn_sum := 0.0
+	var nn_n := 0
+	var crowd_sum := 0.0
+	var samples := 0
+	for seed in 3:
+		var pair2 := TeamFactory.quick_pair(500 + seed)
+		var sim2 := MatchSim.new()
+		sim2.setup(pair2[0], pair2[1], {"seed": seed, "length": 120.0})
+		var k := 0
+		while sim2.phase != C.PH_FULLTIME and k < 60 * 60 * 5:
+			sim2.tick()
+			k += 1
+			if k % 30 != 0 or sim2.phase != C.PH_PLAY:
+				continue
+			samples += 1
+			var bf := sim2.ball_flat()
+			for sp in sim2.players:
+				var a := sp as SimPlayer
+				if a.is_gk():
+					continue
+				if a.pos.distance_to(bf) < 5.0:
+					crowd_sum += 1.0
+				var nn := 99.0
+				for sq in sim2.players:
+					var b := sq as SimPlayer
+					if b != a and b.team == a.team and not b.is_gk():
+						nn = minf(nn, a.pos.distance_to(b.pos))
+				nn_sum += nn
+				nn_n += 1
+	print("mean nearest team-mate %.2f m, outfield players within 5 m of ball %.2f" % [nn_sum / nn_n, crowd_sum / samples])
+	quit()
 	# over the bar trace
 	var b := SimBall.new()
 	b.reset(Vector2(14, 0))

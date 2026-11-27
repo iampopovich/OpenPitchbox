@@ -274,3 +274,39 @@ func test_replay_buffer() -> void:
 		sim.tick()
 	var frames := sim.replay_frames(4.0)
 	runner.check(frames.size() == 240, "4 s of frames, got %d" % frames.size())
+
+
+func test_team_keeps_shape() -> void:
+	## Teams must not collapse onto the ball: spacing and crowding limits.
+	var nn_sum := 0.0
+	var nn_n := 0
+	var crowd := 0.0
+	var samples := 0
+	for seed in 2:
+		var sim := _sim(500 + seed, {"length": 90.0})
+		var k := 0
+		while sim.phase != C.PH_FULLTIME and k < 60 * 60 * 4:
+			sim.tick()
+			k += 1
+			if k % 30 != 0 or sim.phase != C.PH_PLAY:
+				continue
+			samples += 1
+			var bf := sim.ball_flat()
+			for sp in sim.players:
+				var a := sp as SimPlayer
+				if a.is_gk():
+					continue
+				if a.pos.distance_to(bf) < 5.0:
+					crowd += 1.0
+				var nn := 99.0
+				for sq in sim.players:
+					var b := sq as SimPlayer
+					if b != a and b.team == a.team and not b.is_gk():
+						nn = minf(nn, a.pos.distance_to(b.pos))
+				nn_sum += nn
+				nn_n += 1
+	var mean_nn := nn_sum / nn_n
+	var mean_crowd := crowd / samples
+	print("    nearest team-mate %.2f m, players near ball %.2f" % [mean_nn, mean_crowd])
+	runner.check(mean_nn >= 4.5, "team-mates too close: %.2f m" % mean_nn)
+	runner.check(mean_crowd <= 3.8, "too many players around the ball: %.2f" % mean_crowd)

@@ -30,28 +30,28 @@ func follow(target: Vector3, dt: float) -> void:
 
 
 func _apply(_dt: float) -> void:
-	var fx := clampf(focus.x, -C.HX + 7.0, C.HX - 7.0)
+	var fx := clampf(focus.x, -C.HX + 5.0, C.HX - 5.0)
 	var fz := clampf(focus.z, -C.HZ + 3.0, C.HZ - 3.0)
 	var eye: Vector3
 	var at: Vector3
 	match mode:
 		CAM_LOW:
-			fov = 46.0
-			eye = Vector3(fx * 0.92, 8.5, fz * 0.35 + 21.0)
-			at = Vector3(fx * 0.92, 0.6, fz * 0.55)
+			fov = 44.0
+			eye = Vector3(fx * 0.95, 6.5, fz * 0.4 + 15.5)
+			at = Vector3(fx * 0.95, 0.8, fz * 0.6)
 		CAM_END:
 			fov = 50.0
 			var ex := clampf(focus.x, -C.HX + 2.0, C.HX - 2.0)
-			eye = Vector3(ex - end_dir * 16.0, 12.5, fz * 0.55)
-			at = Vector3(ex + end_dir * 5.0, 0.0, fz * 0.75)
+			eye = Vector3(ex - end_dir * 12.0, 9.0, fz * 0.6)
+			at = Vector3(ex + end_dir * 5.0, 0.0, fz * 0.8)
 		CAM_TOP:
 			fov = 44.0
-			eye = Vector3(fx * 0.75, 40.0, fz * 0.25 + 6.0)
+			eye = Vector3(fx * 0.8, 30.0, fz * 0.3 + 5.0)
 			at = Vector3(fx * 0.75, 0.0, fz * 0.25)
 		_:
-			fov = 40.0
-			eye = Vector3(fx * 0.85, 19.0, fz * 0.3 + 26.0)
-			at = Vector3(fx * 0.85, 0.0, fz * 0.5)
+			fov = 38.0
+			eye = Vector3(fx * 0.9, 12.5, fz * 0.35 + 18.5)
+			at = Vector3(fx * 0.9, 0.0, fz * 0.6)
 	if shake > 0.0:
 		var t := Time.get_ticks_msec() / 1000.0
 		eye += Vector3(sin(t * 47.0), cos(t * 39.0), sin(t * 31.0)) * shake * 0.25

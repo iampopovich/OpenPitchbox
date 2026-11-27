@@ -18,7 +18,7 @@ const BOX_DEPTH := 6.0      # penalty box depth from the goal line
 const BOX_HW := 6.5         # penalty box half width
 
 # Ball
-const BALL_R := 0.12
+const BALL_R := 0.15
 const GRAVITY := 13.0
 const BALL_AIR_DRAG := 0.10
 const BALL_ROLL_DECEL := 4.2
